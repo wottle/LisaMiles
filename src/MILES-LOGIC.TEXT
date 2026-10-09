@@ -1,0 +1,13 @@
+{ MILES-LOGIC: portable rules engine and computer opponent for 1000 Miles.        }
+{ No Lisa units are used here so the same file compiles on the Mac and on the Lisa. }
+unit MilesLogic;
+
+interface
+
+{@IFACE}
+
+implementation
+
+{@IMPL}
+
+end.
