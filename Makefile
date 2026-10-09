@@ -1,22 +1,35 @@
-FPC     ?= fpc
-FPCOPTS  = -Mtp -Cr -Co -vewn -FEbuild -FUbuild -Fubuild -Fuhost_test
-SRC      = src/MILES-LOGIC.TEXT
+FPC      ?= fpc
+FPCOPTS   = -Mtp -Cr -Co -vewn -FEbuild -FUbuild -Fubuild -Fuhost_test
+# Lisa wants (*$U MILES/X.OBJ *) before each non-intrinsic unit in a uses list; Free Pascal does
+# not, so host builds copy each portable unit with those directives removed.
+STRIP     = sed -e 's/(\*\$$U [^*]*\*)//g'
+SRC       = src/MILES-LOGIC.TEXT
 
-.PHONY: all test sim lint clean
+# The test and simulator programs are always rebuilt (half a second): make's one-second file-time
+# granularity can otherwise skip a rebuild right after a quick edit.
+.PHONY: all test sim lint clean build/test_logic build/test_ui build/sim
 all: test sim lint
 
-build/mileslogic.pas: $(SRC)
+build/mileslogic.pas: src/MILES-LOGIC.TEXT
 	@mkdir -p build
-	cp $(SRC) $@
+	$(STRIP) $< > $@
+
+build/mileslayout.pas: src/MILES-LAYOUT.TEXT
+	@mkdir -p build
+	$(STRIP) $< > $@
 
 build/test_logic: build/mileslogic.pas host_test/test_logic.pas host_test/testkit.pas
 	$(FPC) $(FPCOPTS) host_test/test_logic.pas
 
+build/test_ui: build/mileslayout.pas host_test/test_ui.pas host_test/testkit.pas
+	$(FPC) $(FPCOPTS) host_test/test_ui.pas
+
 build/sim: build/mileslogic.pas host_test/sim.pas
 	$(FPC) $(FPCOPTS) host_test/sim.pas
 
-test: build/test_logic
+test: build/test_logic build/test_ui
 	./build/test_logic
+	./build/test_ui
 
 sim: build/sim
 	./build/sim 2000

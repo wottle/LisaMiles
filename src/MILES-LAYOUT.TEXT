@@ -1,0 +1,158 @@
+{ MILES-LAYOUT: where everything sits on the 1000 Miles table, in window-local pixels,  }
+{ and which thing a mouse click landed on.  No Lisa units: the same file is tested on   }
+{ the Mac and compiled on the Lisa.  Boxes follow QuickDraw: right and bottom are the   }
+{ first pixel OUTSIDE the box.  Seat 0 is the human (bottom of the screen), seat 1 the  }
+{ computer (top).                                                                       }
+unit MilesLayout;
+
+interface
+
+const
+  ContentW = 640;
+  ContentH = 310;
+  CardW = 54;
+  CardH = 48;
+
+  SlotBattle  = 0;
+  SlotSpeed   = 1;
+  SlotSafety0 = 2;      { safeties occupy slots 2..5 in the order Ace, Tank, Tough, RoW }
+  SlotMiles   = 6;
+  NumSlots    = 7;
+
+type
+  Box = record
+    left, top, right, bottom : integer;
+  end;
+
+  HitKind = (hkNone, hkHand, hkDraw, hkDiscard, hkOwn, hkOpp);
+
+  HitInfo = record
+    kind  : HitKind;
+    index : integer;      { hand card 1..7 for hkHand, else 0 }
+  end;
+
+procedure SlotBox(seat, slot: integer; var b: Box);
+procedure HandBox(i: integer; lifted: boolean; var b: Box);
+procedure DrawPileBox(var b: Box);
+procedure DiscardBox(var b: Box);
+procedure OppHandBox(i: integer; var b: Box);
+procedure RegionBox(seat: integer; var b: Box);
+procedure BoxCenter(var b: Box; var x, y: integer);
+function  PointInBox(x, y: integer; var b: Box): boolean;
+procedure HitTest(x, y, handN, sel: integer; var hit: HitInfo);
+
+implementation
+
+const
+  CompRowY   = 20;
+  MidRowY    = 76;
+  PlayerRowY = 145;
+  HandRowY   = 214;
+  HandLift   = 8;
+  HandStep   = 62;
+  HandX      = 8;
+  OppHandX   = 450;
+  OppHandStep = 22;
+
+function RowY(seat: integer): integer;
+begin
+  if seat = 0 then RowY := PlayerRowY else RowY := CompRowY
+end;
+
+function SlotX(slot: integer): integer;
+begin
+  SlotX := 8;
+  if slot = SlotBattle then SlotX := 8;
+  if slot = SlotSpeed then SlotX := 68;
+  if (slot >= SlotSafety0) and (slot < SlotMiles) then SlotX := 136 + 58 * (slot - SlotSafety0);
+  if slot = SlotMiles then SlotX := 380
+end;
+
+procedure SetBox(var b: Box; l, t, r, bt: integer);
+begin
+  b.left := l; b.top := t; b.right := r; b.bottom := bt
+end;
+
+procedure SlotBox(seat, slot: integer; var b: Box);
+var x, y: integer;
+begin
+  x := SlotX(slot);
+  y := RowY(seat);
+  SetBox(b, x, y, x + CardW, y + CardH)
+end;
+
+procedure HandBox(i: integer; lifted: boolean; var b: Box);
+var x, y: integer;
+begin
+  x := HandX + (i - 1) * HandStep;
+  y := HandRowY;
+  if lifted then y := y - HandLift;
+  SetBox(b, x, y, x + CardW, y + CardH)
+end;
+
+{ The draw pile is a stack of cards drawn offset up and to the right, so its box is bigger. }
+procedure DrawPileBox(var b: Box);
+begin
+  SetBox(b, 8, MidRowY - 4, 8 + CardW + 4, MidRowY + CardH)
+end;
+
+procedure DiscardBox(var b: Box);
+begin
+  SetBox(b, 68, MidRowY, 68 + CardW, MidRowY + CardH)
+end;
+
+procedure OppHandBox(i: integer; var b: Box);
+var x: integer;
+begin
+  x := OppHandX + (i - 1) * OppHandStep;
+  SetBox(b, x, CompRowY, x + CardW, CompRowY + CardH)
+end;
+
+{ The band a click counts as "on that player's side of the table". }
+procedure RegionBox(seat: integer; var b: Box);
+begin
+  SetBox(b, 0, RowY(seat) - 8, ContentW, RowY(seat) + CardH + 4)
+end;
+
+procedure BoxCenter(var b: Box; var x, y: integer);
+begin
+  x := (b.left + b.right) div 2;
+  y := (b.top + b.bottom) div 2
+end;
+
+function PointInBox(x, y: integer; var b: Box): boolean;
+begin
+  PointInBox := (x >= b.left) and (x < b.right) and (y >= b.top) and (y < b.bottom)
+end;
+
+procedure HitTest(x, y, handN, sel: integer; var hit: HitInfo);
+var i: integer; b: Box;
+begin
+  hit.kind := hkNone;
+  hit.index := 0;
+  for i := 1 to handN do begin
+    HandBox(i, i = sel, b);
+    if PointInBox(x, y, b) then begin
+      hit.kind := hkHand;
+      hit.index := i
+    end
+  end;
+  if hit.kind = hkNone then begin
+    DrawPileBox(b);
+    if PointInBox(x, y, b) then hit.kind := hkDraw
+  end;
+  if hit.kind = hkNone then begin
+    DiscardBox(b);
+    if PointInBox(x, y, b) then hit.kind := hkDiscard
+  end;
+  if hit.kind = hkNone then begin
+    RegionBox(0, b);
+    if PointInBox(x, y, b) then hit.kind := hkOwn
+  end;
+  if hit.kind = hkNone then begin
+    RegionBox(1, b);
+    if PointInBox(x, y, b) then hit.kind := hkOpp
+  end
+end;
+
+end.
