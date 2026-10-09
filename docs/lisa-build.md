@@ -42,3 +42,10 @@ Order matters: `LOGIC`, `LAYOUT`, `CTRL`, `GLOBALS`, `DRAW`, `MAIN`.
 - Booleans are not short-circuited: guard array indexes with nested `if`, never with `and`.
 - Alert/phrase numbers must ascend; comments occupy their own line; blank lines are structural.
 
+
+## Fast rebuild after changing ONE source file (about 3 minutes instead of 10)
+1. Send the changed file, then `P` it (see above); if it is a unit other units use, recompile those too.
+2. Link: `L`, the same nine inputs, empty line, Return, output `MILES/MILES`.
+3. Install the new executable over the old one: `F`, `D`, `{T202}Obj`, `Y`; then `C`, source `MILES/MILES.OBJ`,
+   destination `{T202}Obj`; `Q`. (Only changes to the phrase file need the full `<MILES/MAKE`.)
+4. Relaunch the tool from the Office System.

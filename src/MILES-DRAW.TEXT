@@ -299,6 +299,22 @@ begin
    end
 end;
 
+{ TEMPORARY DIAGNOSTIC (remove once the missing-caption bug is understood): shows the length }
+{ of the startup-loaded label and of phrases fetched live, to see which phrase numbers load.   }
+procedure DrawDebug;
+var s, t, u : Str255;
+begin
+   NumToStr(length(lblYou), s);
+   u := concat('lbl=', s);
+   GetPhrase(960, t);  NumToStr(length(t), s);  u := concat(u, ' p960=', s);
+   GetPhrase(941, t);  NumToStr(length(t), s);  u := concat(u, ' p941=', s);
+   GetPhrase(930, t);  NumToStr(length(t), s);  u := concat(u, ' p930=', s);
+   GetPhrase(911, t);  NumToStr(length(t), s);  u := concat(u, ' p911=', s);
+   TextFont(fntCaption);
+   MoveTo(400, statusTextY);
+   DrawString(u)
+end;
+
 procedure DrawStatus;
 var s : Str255;
 begin
@@ -317,6 +333,7 @@ procedure DrawContents {window : WindowPtr};
 var all : Rect;
 begin
    if window = nil then exit(DrawContents);
+   if length(lblYou) = 0 then LoadCaptions;     { TEMPORARY: retry the startup load }
    SetPort(window);
    SetRect(all, 0, 0, ContentW, ContentH);
    ClipRect(all);
@@ -326,7 +343,8 @@ begin
    DrawSide(0);
    DrawHand;
    DrawTargets;
-   DrawStatus
+   DrawStatus;
+   DrawDebug
 end;
 
 end.
