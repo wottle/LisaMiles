@@ -1,0 +1,388 @@
+{ MILES-MAIN.TEXT -- program Miles: process bring-up, the two-phase event loop, the event  }
+{ dispatcher, menu commands, and the Filer handshake.  We are a GUEST: the Filer owns     }
+{ our window and our life, the Window Manager owns the screen.  We react to events.      }
+{ The game itself lives in MilesLogic/MilesCtrl; this file only turns events into calls   }
+{ there and asks MilesDraw to paint the result.  The tool number appears NOWHERE here:    }
+{ we learn it from our own installed pathname (Initialize, step 5).                       }
+program Miles;
+
+uses (*$U UnitStd.obj *)        UnitStd,
+     (*$U UnitHz.obj *)         UnitHz,
+     (*$U Storage.obj *)        Storage,
+     (*$U QuickDraw.obj *)      QuickDraw,
+     (*$U Fontmgr.obj *)        FontMgr,
+     (*$U SysCall.obj *)        SysCall,
+     (*$U wm.events.obj *)      Events,
+     (*$U wm.folders.obj *)     Folders,
+     (*$U wm.menus.obj *)       Menus,
+     (*$U AlertMgr.obj *)       AlertMgr,
+     (*$U WMLstd.obj *)         WMLstd,
+     (*$U WMlCrs.obj *)         WMLCrs,
+     (*$U FilerComm.obj *)      FilerComm,
+     (*$U MILES/LOGIC.OBJ *)    MilesLogic,
+     (*$U MILES/LAYOUT.OBJ *)   MilesLayout,
+     (*$U MILES/CTRL.OBJ *)     MilesCtrl,
+     (*$U MILES/GLOBALS.OBJ *)  MilesGlobals,
+     (*$U MILES/DRAW.OBJ *)     MilesDraw;
+
+{==============================================================================}
+{  The three required callbacks                                                }
+{==============================================================================}
+
+{ The heap's grow-zone callback: we free nothing, so an allocation just fails. }
+function OutOfHeapSpace (hz : THz; bytesNeeded : integer) : integer;
+begin
+   OutOfHeapSpace := 0
+end;
+
+{ The Alert Manager could not DISPLAY an alert.  Fatal during startup (tell the Filer }
+{ we never got going); afterwards we carry on without the message.                   }
+procedure AlertFailed;
+var err : integer;
+begin
+   if initing then begin
+      TellFiler(err, initFailed, noMemory, nil);
+      Halt
+   end
+end;
+
+{ The SYS_TERMINATE handler: runs on EVERY exit, clean or not.  ImDying MUST come    }
+{ first -- until it is called the Filer, and with it the desktop, is blocked on us.  }
+procedure LastWishes (environPtr : p_env_blk; excepDataPtr : p_ex_data);
+begin
+   ImDying;
+   Halt
+end;
+
+{==============================================================================}
+{  Painting, menus, game flow                                                  }
+{==============================================================================}
+
+procedure Repaint;
+begin
+   if myWindow <> nil then begin
+      SetPort(myWindow);
+      DrawContents(myWindow)
+   end
+end;
+
+{ The update protocol: when 'normal', clip drawing to the damaged region first. }
+procedure doUpdateEvent (normal : boolean; window : WindowPtr);
+begin
+   if normal then BeginUpdate(window);
+   DrawContents(window);
+   if normal then EndUpdate(window)
+end;
+
+{ The menu bar belongs to the active process and is cleared on every switch, so every }
+{ folderActivate rebuilds it from scratch.                                           }
+procedure PutUpMenus;
+var m : integer;
+begin
+   ClearMenuBar;
+   for m := mFile to lastBarMenu do
+      InsertMenu(myMenus[m], 0);
+   DrawMenuBar
+end;
+
+{ Tell the player how the hand ended: who won, and the scores. }
+procedure ShowHandResult;
+var s1, s2, s3 : Str255;
+begin
+   NumToStr(HandPoints(theGame, 0), s1);
+   NumToStr(HandPoints(theGame, 1), s2);
+   NumToStr(ui.match[0], s3);
+   ParamAlert(s1, s2, s3);
+   if theGame.tripBy = 0 then NoteAlert(allAlerts, alrtYouWin)
+   else if theGame.tripBy = 1 then NoteAlert(allAlerts, alrtCompWin)
+   else NoteAlert(allAlerts, alrtNoWinner)
+end;
+
+{ The computer attacked while we hold the matching safety: ask whether to play it. }
+procedure AskCoup;
+var ev   : UIEvent;
+    h, f : Str255;
+    sf   : CardKind;
+begin
+   sf := SafetyFor(theGame.coupHazard);
+   h := capText[theGame.coupHazard];
+   f := capText[sf];
+   ParamAlert(h, f, '');
+   if CautionAlert(allAlerts, alrtCoup) then
+      UICoupAnswer(ui, theGame, true, ev)
+   else
+      UICoupAnswer(ui, theGame, false, ev);
+   Repaint;
+   if ev = ueHandOver then ShowHandResult
+end;
+
+{ Everything that follows a click or a computer move: repaint, then any prompt. }
+procedure AfterEvent (ev : UIEvent);
+begin
+   if ev <> ueNone then Repaint;
+   if ev = ueCoupPrompt then AskCoup
+   else if ev = ueHandOver then ShowHandResult;
+   nextAi := Time + aiDelay
+end;
+
+procedure StartHand (confirm : boolean);
+begin
+   if confirm then
+      if theGame.ph <> phOver then
+         if not CautionAlert(allAlerts, alrtNewGame) then
+            exit(StartHand);
+   UINewHand(ui, theGame, Time);
+   haveGame := true;
+   nextAi := Time + aiDelay;
+   Repaint
+end;
+
+procedure DoWindowClick;
+var ev : UIEvent;
+begin
+   if myWindow = nil then exit(DoWindowClick);
+   SetPort(myWindow);
+   UIClick(ui, theGame, theEvent.where.h, theEvent.where.v, ev);
+   AfterEvent(ev)
+end;
+
+{ Phase-B idle work: let the computer take its turn, one visible step at a time. }
+procedure DoComputerStep;
+var ev : UIEvent;
+begin
+   if myWindow = nil then exit(DoComputerStep);
+   if Time < nextAi then exit(DoComputerStep);
+   if theGame.ph = phOver then exit(DoComputerStep);
+   if (theGame.ph = phCoup) or (theGame.turn = 1) then begin
+      UIAdvance(ui, theGame, ev);
+      AfterEvent(ev)
+   end
+end;
+
+procedure MenuCommand (menu, item : integer);
+var err : integer;
+begin
+   case menu of
+      mFile :
+         case item of
+            miAsideAll :
+               DoFilingCmd(cmdClosAll);
+            miAside :
+               DoFilingCmd(cmdClose);
+            miPutAway :
+               begin
+                  TellFiler(err, docClosd, docPutBack, myWindow);
+                  myWindow := nil
+               end;
+         end;
+      mGame :
+         case item of
+            miNewGame :
+               StartHand(true);
+            miRules :
+               NoteAlert(allAlerts, alrtRules);
+         end;
+   end
+end;
+
+{==============================================================================}
+{  Lifecycle: window arrival, Filer events, the dispatcher                     }
+{==============================================================================}
+
+{ The Filer lent us a window (fcNone): take it, deal the first hand if we have none, }
+{ size and paint it, and put our menus up (no folderActivate arrives for this first  }
+{ activation, so without this the menu bar would stay empty).                        }
+procedure InitNewDoc (window : WindowPtr);
+begin
+   myWindow := window;
+   TakeWindow(myWindow);
+   if not haveGame then begin
+      UINewHand(ui, theGame, Time);
+      haveGame := true
+   end;
+   nextAi := Time + aiDelay;
+   FolderSize(myWindow, ContentW, ContentH, false);
+   SetPort(myWindow);
+   ValidRect(myWindow^.portRect);
+   doUpdateEvent(false, myWindow);
+   if activeFolder = myWindow then PutUpMenus
+end;
+
+procedure DoFilerEvent;
+var wantsOpen : boolean;
+begin
+   HandleFilerOp(wantsOpen);
+   if wantsOpen then
+      InitNewDoc(theEvent.who)
+end;
+
+procedure ProcessTheEvent;
+var theMenu, theItem : integer;
+begin
+   case theEvent.what of
+
+      buttonDown :
+         if theEvent.who = menuFolder then begin
+            MenuSelect(theEvent.where, theMenu, theItem);
+            if (theMenu <> 0) and (theItem <> 0) then
+               MenuCommand(theMenu, theItem);
+            HiLiteMenu(0)
+         end
+         else if theEvent.who = myWindow then
+            DoWindowClick;
+
+      buttonUp :
+         ;
+
+      keyDown :
+         if (theEvent.who = myWindow) and (not theEvent.repeatKey) then
+            if theEvent.appleKey then begin
+               MenuKey(theEvent.ascii, theMenu, theItem);
+               if theMenu <> 0 then begin
+                  HiLiteMenu(theMenu);
+                  MenuCommand(theMenu, theItem);
+                  HiLiteMenu(0)
+               end
+            end;
+
+      folderActivate :
+         begin
+            TakeControl(theEvent, false, false);
+            PutUpMenus
+         end;
+
+      folderDeactivate :
+         GiveControl(theEvent);
+
+      folderUpdate :
+         if theEvent.who = myWindow then
+            doUpdateEvent(true, theEvent.who)
+         else begin
+            { Not ours (for instance an update queued for a window we just handed back }
+            { to the Filer): it must still be CONSUMED or it is re-sent forever.      }
+            BeginUpdate(theEvent.who);
+            EndUpdate(theEvent.who)
+         end;
+
+      folderMoved :
+         ;
+
+      filerEvent :
+         DoFilerEvent;
+
+      abortEvent :
+         ;
+
+      diedEvent, diskEvent, catalogEvent :
+         ;
+
+      nilEvent :
+         ;
+
+      otherwise
+
+   end
+end;
+
+{==============================================================================}
+{  Initialize -- the order of these steps matters.  On any failure we tell the   }
+{  Filer we never got started and halt.                                         }
+{==============================================================================}
+
+procedure Initialize;
+var err      : integer;
+    schedErr : integer;
+    pcInfo   : procinfoRec;
+    excName  : t_ex_name;
+    myPrefix : TParamAlert;
+    cutAt    : integer;
+begin
+   initing := true;
+
+   { (1) FIRST: the terminate handler, before anything that could fail. }
+   excName := 'SYS_TERMINATE';
+   Declare_Excep_Hdl(err, excName, @LastWishes);
+   if err <> 0 then begin
+      TellFiler(err, initFailed, noMemory, nil);
+      halt
+   end;
+
+   { (2) Known state for our flags. }
+   toldToDie := false;
+   myWindow  := nil;
+   haveGame  := false;
+   nextAi    := 0;
+   UIInit(ui);
+
+   { (3) The private heap, carved out of the static myZone array. }
+   InitHeap(@myZone[0], @myZone[maxHeap], @OutOfHeapSpace);
+
+   { (4) Who am I, and where on disk?  Info_Process may block, so drop to preemptive }
+   { scheduling around it.                                                         }
+   Sched_Class(schedErr, false);
+   Info_Process(err, My_ID, pcInfo);
+   Sched_Class(schedErr, true);
+
+   { (5) The tool-number-independent prefix: the executable is installed under a   }
+   { name that begins with the tool number in curly braces, so our own pathname      }
+   { already carries it.  Keep everything through the closing brace character.     }
+   cutAt := pos('}', pcInfo.progpathname);
+   if (cutAt = 0) or (cutAt > 40) then begin
+      TellFiler(err, initFailed, internalError, nil);
+      halt
+   end;
+   myPrefix := copy(pcInfo.progpathname, 1, cutAt);
+
+   { (6) Menus and alerts: InitMP opens "<myPrefix>PHRASE", installs the menu blocks }
+   { into myMenus, and loads the alert directory.                                   }
+   InitMP(theHeap, myPrefix, @AlertFailed, alertVerNum,
+          @myMenus[mFile], allAlerts, err);
+   if err > 0 then begin
+      TellFiler(err, initFailed, noMemory, nil);
+      halt
+   end;
+   LoadCaptions;
+
+   { (7) The standard cursor shapes. }
+   InitWmlCrs(err);
+   if err <> 0 then begin
+      TellFiler(err, initFailed, noDiskSpace, nil);
+      halt
+   end;
+
+   { (8) A guaranteed-valid current port before any drawing. }
+   SetPort(deskPort);
+
+   initing := false
+end;
+
+{==============================================================================}
+{  The main program: the two-phase event loop at the heart of every LOS tool.   }
+{==============================================================================}
+
+begin
+   InitGraf(@thePort);      { QuickDraw for THIS process }
+   OpenWm;                  { attach to the Window Manager }
+   Initialize;
+
+   repeat
+      { Phase A: we are not the active window.  GetEvent blocks and may suspend us. }
+      while not (ImActive or toldToDie) do begin
+         GetEvent(theEvent);
+         ProcessTheEvent
+      end;
+
+      { Phase B: we ARE active.  Poll; when idle, do periodic work and then yield. }
+      while ImActive and (not toldToDie) do begin
+         if EventAvail then begin
+            GetEvent(theEvent);
+            ProcessTheEvent
+         end
+         else begin
+            DoComputerStep;
+            LetOthersRun         { NEVER omitted: the scheduler is cooperative }
+         end
+      end;
+
+   until toldToDie
+end.

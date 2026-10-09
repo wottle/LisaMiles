@@ -1,0 +1,56 @@
+{ MILES-DRAW.TEXT (STUB) -- just enough drawing to prove the framework launches: the     }
+{ window frame, the two player labels from the phrase file, and the status line.       }
+{ Task 7 replaces this file with the real table renderer; the interface is identical.  }
+unit MilesDraw;
+
+INTERFACE
+
+uses (*$U UnitStd.obj *)        UnitStd,
+     (*$U UnitHz.obj *)         UnitHz,
+     (*$U Storage.obj *)        Storage,
+     (*$U QuickDraw.obj *)      QuickDraw,
+     (*$U Fontmgr.obj *)        FontMgr,
+     (*$U SysCall.obj *)        SysCall,
+     (*$U wm.events.obj *)      Events,
+     (*$U wm.folders.obj *)     Folders,
+     (*$U wm.menus.obj *)       Menus,
+     (*$U AlertMgr.obj *)       AlertMgr,
+     (*$U WMLstd.obj *)         WMLstd,
+     (*$U WMlCrs.obj *)         WMLCrs,
+     (*$U FilerComm.obj *)      FilerComm,
+     (*$U MILES/LOGIC.OBJ *)    MilesLogic,
+     (*$U MILES/LAYOUT.OBJ *)   MilesLayout,
+     (*$U MILES/CTRL.OBJ *)     MilesCtrl,
+     (*$U MILES/GLOBALS.OBJ *)  MilesGlobals;
+
+procedure DrawContents (window : WindowPtr);
+
+IMPLEMENTATION
+
+procedure DrawContents {window : WindowPtr};
+var all : Rect;
+    s   : Str255;
+begin
+   if window = nil then exit(DrawContents);
+   SetPort(window);
+   SetRect(all, 0, 0, ContentW, ContentH);
+   ClipRect(all);
+   EraseRect(all);
+   PenNormal;
+   FrameRect(all);
+   TextMode(srcOr);
+   TextFace([]);
+   TextFont(fntBig);
+   s := lblComputer;
+   MoveTo(20, 40);
+   DrawString(s);
+   s := lblYou;
+   MoveTo(20, 160);
+   DrawString(s);
+   TextFont(fntCaption);
+   GetPhrase(phStatusBase + StatusMsg(ui, theGame), s);
+   MoveTo(8, 291);
+   DrawString(s)
+end;
+
+end.

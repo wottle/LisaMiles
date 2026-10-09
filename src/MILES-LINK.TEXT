@@ -1,0 +1,25 @@
+$EXEC
+${=============================================================================}
+${ MILES-LINK.TEXT -- link the 1000 Miles objects with the standard runtime      }
+${ libraries into one executable: main program and our own units first, the      }
+${ standard libraries last.  The intrinsic units (QuickDraw, the Window Manager,  }
+${ AlertMgr ...) are NOT named: the linker resolves them through INTRINSIC.LIB.   }
+${ Integer arithmetic only, so IOSFPLIB is deliberately absent.  If the linker    }
+${ reports an unresolved routine we 'uses'd, a LIBRARY is missing from this list  }
+${ (try adding PRLIB).  Success is the line 'Output is executable'.               }
+${=============================================================================}
+F{ilemgr}D{elete}MILES/MILES.OBJ  Y{es}
+        Q{uit}
+L{inker}MILES/MAIN.OBJ
+MILES/GLOBALS.OBJ
+MILES/DRAW.OBJ
+MILES/CTRL.OBJ
+MILES/LAYOUT.OBJ
+MILES/LOGIC.OBJ
+IOSPASLIB.OBJ
+SYS1LIB.OBJ
+SYS2LIB.OBJ
+{end of the input list - this comment-only line is the blank [RETURN] answer}
+{no listing file - second blank answer}
+MILES/MILES.OBJ
+$ENDEXEC

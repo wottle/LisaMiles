@@ -1,0 +1,163 @@
+{ MILES-GLOBALS.TEXT -- shared constants, the program's global variables, and the     }
+{ small routines every other Lisa-side unit needs.  Build order: LOGIC, LAYOUT, CTRL,  }
+{ GLOBALS, DRAW, then the main program.  Lisa Pascal compiles a unit against the       }
+{ already-compiled .OBJ of each unit it uses, so that order is not optional.           }
+{                                                                                      }
+{ NOTE: a unit that uses this one must also list, BEFORE it, every unit named in this  }
+{ interface's uses-list (the Window Manager and Alert Manager types appear below).     }
+unit MilesGlobals;
+
+INTERFACE
+
+uses (*$U UnitStd.obj *)        UnitStd,
+     (*$U UnitHz.obj *)         UnitHz,
+     (*$U Storage.obj *)        Storage,
+     (*$U QuickDraw.obj *)      QuickDraw,
+     (*$U Fontmgr.obj *)        FontMgr,
+     (*$U SysCall.obj *)        SysCall,
+     (*$U wm.events.obj *)      Events,
+     (*$U wm.folders.obj *)     Folders,
+     (*$U wm.menus.obj *)       Menus,
+     (*$U AlertMgr.obj *)       AlertMgr,
+     (*$U WMLstd.obj *)         WMLstd,
+     (*$U WMlCrs.obj *)         WMLCrs,
+     (*$U FilerComm.obj *)      FilerComm,
+     (*$U MILES/LOGIC.OBJ *)    MilesLogic,
+     (*$U MILES/LAYOUT.OBJ *)   MilesLayout,
+     (*$U MILES/CTRL.OBJ *)     MilesCtrl;
+
+const
+   maxHeap = 8000;          { words in our private heap: menus + the alert cache }
+
+   { Menus: ids and item positions must match MILES-ALERTS.TEXT. }
+   mFile = 1;
+      miAsideAll = 1;
+      miAside    = 2;
+      miPutAway  = 4;
+   mGame = 2;
+      miNewGame  = 1;
+      miRules    = 3;
+   lastBarMenu = 2;
+   lastMenu    = 2;
+
+   alertVerNum   = 1;       { must equal the version number in MILES-ALERTS.TEXT }
+   alrtFallback  = 1;
+   alrtSwanSong  = 2;
+   alrtNewGame   = 10;
+   alrtCoup      = 20;
+   alrtYouWin    = 30;
+   alrtCompWin   = 31;
+   alrtNoWinner  = 32;
+   alrtRules     = 40;
+
+   phStatusBase  = 910;     { status text = 910 + a status code (an Err or Msg code) }
+   phCardBase    = 940;     { card caption = 940 + ord(card kind) }
+   phComputer    = 960;
+   phYou         = 961;
+   phMiles       = 962;
+   phMatch       = 963;
+
+   fntCaption = tile12;     { card captions and labels }
+   fntBig     = tile18;     { card numerals }
+
+   aiDelay = 60;            { hundredths of a second between the computer's moves }
+
+type
+   CapStr = string[15];
+
+var
+   theEvent  : EventRecord;
+   myWindow  : WindowPtr;   { the window the Filer lent us; nil when we have none }
+   toldToDie : boolean;     { set by the Filer's terminate command }
+   initing   : boolean;     { true while Initialize runs (AlertFailed is fatal then) }
+   myMenus   : array [1..lastMenu] of MenuInfo;
+   allAlerts : TAlertFile;
+   myZone    : array [0..maxHeap] of integer;
+
+   theGame   : Game;        { the hand in progress }
+   ui        : UIState;     { selection, status message, match totals }
+   haveGame  : boolean;     { has a hand been dealt yet? }
+   nextAi    : longint;     { Time value at which the computer may act next }
+
+   capText   : array [ckNone..sfRoW] of CapStr;   { card captions, loaded at start }
+   lblComputer, lblYou, lblMiles, lblMatch : CapStr;
+
+procedure NumToStr (n : longint; var s : Str255);
+procedure GetPhrase (n : integer; var s : Str255);
+procedure LoadCaptions;
+procedure HandleFilerOp (var wantsOpen : boolean);
+
+IMPLEMENTATION
+
+{ Non-negative number to decimal text, no leading zeros.  These are NUMERALS, not    }
+{ language, so building them in code does not break the no-literal-strings rule.    }
+procedure NumToStr {n : longint; var s : Str255};
+var divisor : longint;
+    d       : integer;
+    started : boolean;
+begin
+   if n < 0 then n := 0;
+   s := '';
+   divisor := 1000000000;
+   started := false;
+   while divisor > 0 do begin
+      d := (n div divisor) mod 10;
+      if (d <> 0) or started or (divisor = 1) then begin
+         s := concat(s, ' ');
+         s[length(s)] := chr(ord('0') + d);
+         started := true
+      end;
+      divisor := divisor div 10
+   end
+end;
+
+{ Fetch a phrase from the phrase file; empty if the number is missing. }
+procedure GetPhrase {n : integer; var s : Str255};
+begin
+   s := '';
+   GetAlert(allAlerts, n, @s)
+end;
+
+procedure LoadCaptions;
+var k : CardKind;
+    t : Str255;
+begin
+   for k := ck25 to sfRoW do begin
+      GetPhrase(phCardBase + ord(k), t);
+      capText[k] := copy(t, 1, 15)
+   end;
+   GetPhrase(phComputer, t);  lblComputer := copy(t, 1, 15);
+   GetPhrase(phYou, t);       lblYou      := copy(t, 1, 15);
+   GetPhrase(phMiles, t);     lblMiles    := copy(t, 1, 15);
+   GetPhrase(phMatch, t);     lblMatch    := copy(t, 1, 15)
+end;
+
+{ The Filer protocol.  EVERY Filer command must be answered, or the whole desktop      }
+{ freezes.  fcNone is the only one that needs the main program: it lends us a window.  }
+procedure HandleFilerOp {var wantsOpen : boolean};
+var fx  : FilerExt;
+    err : integer;
+begin
+   wantsOpen := false;
+   GetAddParms(err, theEvent, fx);
+   case fx.theFlrOp of
+      fcNone :
+         wantsOpen := true;
+      fcResume :
+         TellFiler(err, docClosd, internalError, theEvent.who);
+      fcClose, fcSuspend, fcShred :
+         begin
+            myWindow := nil;
+            TellFiler(err, docClosd, allOK, theEvent.who)
+         end;
+      fcCopy, fcPut :
+         TellFiler(err, docNotXfered, internalError, theEvent.who);
+      fcDfClose :
+         TellFiler(err, dfClosed, allOK, theEvent.who);
+      fcTerminate :
+         toldToDie := true;
+      otherwise
+   end
+end;
+
+end.

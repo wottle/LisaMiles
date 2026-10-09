@@ -1,0 +1,231 @@
+; =============================================================================
+;  MILES-ALERTS.TEXT -- the phrase-file SOURCE for 1000 Miles.
+;
+;  Compiled by the Workshop 'Alert' tool into the binary {T202}PHRASE file that
+;  InitMP reads at run time (see MILES-MAKE.TEXT).  Every string the user sees
+;  -- alerts, menus, card captions, status messages -- lives here, none in the
+;  Pascal source.
+;
+;  FORMAT RULES THAT BITE:
+;    - a comment must occupy its OWN line;
+;    - blank lines are STRUCTURAL: one ends the button block, one ends each
+;      alert's text, one ends each menu block -- do not add extras;
+;    - numbers must be strictly ascending; #1 and #2 are REQUIRED;
+;    - the alert/phrase section and the menu section each end with a lone 0.
+;
+;  The numbers here must match MILES-GLOBALS.TEXT (alrt*, ph*, m*, mi*); a '-'
+;  separator line counts as an item position.
+; =============================================================================
+;
+; ---- FILE HEADER: version (= alertVerNum), cache slots, cache bytes ----------
+1
+6
+3000
+; The five icon strings in EXACTLY this order: ask, wait, stop, note, caution.
+?
+Wait
+Stop
+Note
+Caution
+; Button captions: index 0 MUST be Cancel, index 1 MUST be OK.
+Cancel
+OK
+
+; ==== ALERTS =================================================================
+1 note alert
+1000 Miles could not find the message that should appear here.  If you are
+unable to proceed, contact a qualified service representative, and mention
+the number ^N.
+
+2 stop alert
+1000 Miles is having technical difficulties accessing the disk that contains
+the 1000 Miles tool.^L^L
+Put away your documents one at a time, or push the on-off button to save
+them all.
+
+10 caution ok alert
+Start a new hand?  The hand in progress will be lost.
+
+; -- Coup Fourre prompt: OK plays the safety, Cancel declines.
+;    ^1 = the hazard played on you, ^2 = the safety you are holding.
+20 caution ok alert
+The computer played ^1 on you, and you are holding ^2.^L^L
+Play it now as a Coup Fourre?  The attack is cancelled, you draw a replacement
+card, and you take the next turn.
+
+; -- Hand results.  ^1 = your hand score, ^2 = the computer's, ^3 = your match total.
+30 note alert
+You win the hand!^L^L
+Hand score:  you ^1, computer ^2.^L
+Your match total:  ^3.
+
+31 note alert
+The computer wins the hand.^L^L
+Hand score:  you ^1, computer ^2.^L
+Your match total:  ^3.
+
+32 note alert
+Nobody finished the trip.^L^L
+Hand score:  you ^1, computer ^2.^L
+Your match total:  ^3.
+
+40 note alert
+How to play 1000 Miles^L^L
+Be first to travel exactly 1000 miles.  On your turn, click the draw pile, then
+click a card in your hand and click where it goes: your side to move or fix
+your car, the computer's side to attack it, or the discard pile to throw the
+card away.^L^L
+You need a Go card to start, and a remedy for every hazard.  Safety cards
+protect you for good, and playing one gives you another turn.  Only two
+200-mile cards per hand.
+
+; ==== PHRASES (number-only headers, one text line each, each ends with a blank line)
+; -- 911..922: status text for the Err codes of MILES-LOGIC (910 + code).
+911
+Draw a card first.
+
+912
+Pick a card from your hand.
+
+913
+You need a Go card first.
+
+914
+You must fix your problem before moving.
+
+915
+Speed limit: 50 miles or less.
+
+916
+Only two 200-mile cards per hand.
+
+917
+That would go past 1000 miles.
+
+918
+That is not the right remedy.
+
+919
+That card cannot go there.
+
+920
+They are protected by a safety.
+
+921
+That would have no effect right now.
+
+922
+You do not need that.
+
+; -- 930..936: the UI's own status text (910 + code 20..26).
+930
+Your turn: click the draw pile.
+
+931
+Click a card, then click where it goes.
+
+932
+The computer is thinking...
+
+933
+The computer played a Coup Fourre!
+
+934
+The hand is over.  Choose New Game from the Game menu.
+
+935
+Waiting for your answer.
+
+936
+You already drew.  Play or discard a card.
+
+; -- 941..959: card captions (940 + the card's position in MilesLogic.CardKind).
+;    Keep them short: they must fit inside a 54-pixel-wide card.
+941
+MILES
+
+942
+MILES
+
+943
+MILES
+
+944
+MILES
+
+945
+MILES
+
+946
+CRASH
+
+947
+NO GAS
+
+948
+FLAT
+
+949
+LIMIT 50
+
+950
+STOP
+
+951
+REPAIR
+
+952
+GAS
+
+953
+SPARE
+
+954
+END LIM
+
+955
+GO
+
+956
+ACE
+
+957
+TANK
+
+958
+TIRES
+
+959
+R.O.W.
+
+; -- 960..963: labels.
+960
+COMPUTER
+
+961
+YOU
+
+962
+mi
+
+963
+Match
+
+0
+; ==== MENUS ==================================================================
+; Each block: menuId, title, one item per line ('/X' = Apple-key equivalent,
+; a lone '-' = disabled separator that still takes an item number), blank line.
+1
+File
+Set Aside Everything
+Set Aside "1000 Miles"
+-
+Save & Put Away
+
+2
+Game
+New Game/N
+-
+How to Play ...
+
+0

@@ -1,0 +1,39 @@
+$EXEC
+${=============================================================================}
+${ MILES-MAKE.TEXT -- the build driver: compile, link, install as tool number   }
+${ 202, and compile + install the phrase file.  THIS FILE IS THE ONLY PLACE THE }
+${ TOOL NUMBER EXISTS: the program learns its number from its own pathname.     }
+${                                                                            }
+${ Exec-file traps: curly braces delimit comments, so the tool name and number  }
+${ are written with a ~ before each brace; a Workshop line that is only a       }
+${ comment emits a bare [RETURN] (used deliberately for InstallTool's device     }
+${ question); stale outputs are deleted before rebuilding them.                 }
+${=============================================================================}
+$SUBMIT MILES/COMP
+$SUBMIT MILES/LINK
+${                                                                            }
+${ Install the executable under its tool name.                                 }
+F{ilemgr}D{elete}~{T202~}Obj
+Y{es}D{elete}~{T202~}PHRASE
+Y{es}C{opy}MILES/MILES.OBJ
+~{T202~}Obj
+Q{uit}
+${                                                                            }
+${ Compile the phrase file straight to its installed name: the Alert tool takes  }
+${ the source and an output STEM and appends 'PHRASE' itself.                   }
+R{un}Alert
+MILES/ALERTS.TEXT
+~{T202~}
+${                                                                            }
+${ Register with the Office System.  InstallTool's dialogue for a tool that does }
+${ NOT make documents is EXACTLY SIX answers.                                   }
+R{un}InstallTool
+Y              {1: auto-overwrite an existing tool with the same NUMBER}
+{2: blank = the PARAPORT device -- this comment-only line is the [RETURN]}
+202            {3: the tool number}
+N              {4: does NOT make documents}
+N              {5: no special opening rectangle}
+1000 Miles
+${ ^ 6: the display name.  Left bare -- an inline comment would leave trailing   }
+${   spaces on the line, and the name is read verbatim.                          }
+$ENDEXEC
