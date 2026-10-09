@@ -651,6 +651,41 @@ begin
   Check(ev = ueDeselect, 'dbl: a click elsewhere in between breaks the pair')
 end;
 
+procedure TestTargets;
+var ev: UIEvent;
+begin
+  FreshPlay;
+  SetHand(g, 0, rmGo, ck50, hzStop, sfAce, rmEndLimit, hzLimit);
+  g.pl[1].battle := rmGo;
+  CheckEq(UITarget(u, g, 0), -1, 'target: nothing selected, nothing highlighted (you)');
+  CheckEq(UITarget(u, g, 1), -1, 'target: nothing selected, nothing highlighted (computer)');
+
+  ClickHand(1, ev);                                   { Go }
+  CheckEq(UITarget(u, g, 0), SlotBattle, 'target: Go highlights your battle pile');
+  CheckEq(UITarget(u, g, 1), -1, 'target: ...and nothing on the computer''s side');
+
+  ClickHand(2, ev);                                   { 50 miles: no Go yet, so no legal target }
+  CheckEq(UITarget(u, g, 0), -1, 'target: a card you cannot play highlights nothing');
+
+  g.pl[0].battle := rmGo;
+  CheckEq(UITarget(u, g, 0), SlotMiles, 'target: distance highlights your miles pile once you have a Go');
+
+  ClickHand(3, ev);                                   { Stop: the computer is moving }
+  CheckEq(UITarget(u, g, 0), -1, 'target: a hazard does not highlight your side');
+  CheckEq(UITarget(u, g, 1), SlotBattle, 'target: Stop highlights the computer''s battle pile');
+
+  ClickHand(6, ev);                                   { Speed Limit }
+  CheckEq(UITarget(u, g, 1), SlotSpeed, 'target: Speed Limit highlights the computer''s speed pile');
+
+  ClickHand(4, ev);                                   { safety }
+  CheckEq(UITarget(u, g, 0), SlotSafety0, 'target: the Ace highlights the first safety slot');
+
+  g.turn := 1;
+  CheckEq(UITarget(u, g, 0), -1, 'target: nothing is highlighted on the computer''s turn');
+  g.turn := 0; g.ph := phOver;
+  CheckEq(UITarget(u, g, 0), -1, 'target: nothing is highlighted when the match is over')
+end;
+
 procedure TestIgnoredClicks;
 var ev: UIEvent; b: Box; before: integer;
 begin
@@ -691,6 +726,7 @@ begin
   TestCoupFlows;
   TestHandOverScoresOnce;
   TestIgnoredClicks;
+  TestTargets;
   TestDoubleClickPlays;
   TestDoubleClickRefusals;
   TestDoubleClickTiming;

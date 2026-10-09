@@ -1,54 +1,13 @@
-{ The Next Match button, shown in the middle band once a match is over. }
-procedure DrawNextButton;
-var b  : Box;
-    r  : Rect;
-    s  : Str255;
-    fi : FontInfo;
-begin
-   if theGame.ph <> phOver then exit(DrawNextButton);
-   NextBox(b);
-   BoxToRect(b, r);
-   PenNormal;
-   EraseRect(r);
-   PenSize(2, 2);
-   FrameRect(r);
-   PenNormal;
-   TextMode(srcOr);
-   TextFont(fntCaption);
-   TextFace([bold]);
-   GetFontInfo(fi);
-   s := lblNext;
-   CenterString(r, r.top + ((r.bottom - r.top) + fi.ascent - fi.descent) div 2, s);
-   TextFace([])
-end;
-
-procedure DrawStatus;
-var s, t : Str255;
-    code : integer;
-begin
-   PenNormal;
-   MoveTo(0, statusLineY);
-   LineTo(ContentW - 1, statusLineY);
-   code := StatusMsg(ui, theGame);
-   GetPhrase(phStatusBase + code, s);
-   { messages about the computer's last move name the card it used }
-   if (code >= MsgCpuPlayed) and (code <= MsgCpuDiscard) then begin
-      t := capText[ui.lastCard];
-      s := concat(s, ' ', t)
-   end;
-   TextFont(fntCaption);
-   TextMode(srcOr);
-   TextFace([]);
-   MoveTo(8, statusTextY);
-   DrawString(s)
-end;
-
-{ MILES-DRAW.TEXT -- all QuickDraw rendering for 1000 Miles.  Geometry comes from       }
-{ MilesLayout, state from the global game and UI records, text from the phrase file.    }
-{ Version 1 draws cards as typographic tiles (numerals and short captions); hand-drawn  }
-{ icons come later.  Card styles read in 1 bit without colour: distance = plain frame   }
-{ with a big numeral; hazard = BLACK card; remedy = double frame; safety = heavy frame  }
-{ with a black band.                                                                    }
+{ MILES-DRAW.TEXT -- all QuickDraw rendering for 1000 Miles.  Geometry comes from MilesLayout,    }
+{ state from the global game and UI records, text from the phrase file.  Cards are typographic    }
+{ tiles: distance = plain frame with a big numeral; hazard = BLACK card; remedy = double frame;   }
+{ safety = heavy frame with a black band.                                                        }
+{                                                                                                }
+{ NO FLICKER: DrawContents repaints everything and is used only when the window is first shown or }
+{ uncovered.  After every game action RefreshContents repaints ONLY the pieces whose data changed }
+{ since the last paint (it remembers what is on screen), and each piece erases just itself.  The  }
+{ window as a whole is never blanked.  The highlight on the target pile is an inverted ring drawn }
+{ INSIDE the pile, so redrawing the pile removes it.                                              }
 unit MilesDraw;
 
 INTERFACE
@@ -71,14 +30,30 @@ uses (*$U UnitStd.obj *)        UnitStd,
      (*$U MILES/CTRL.OBJ *)     MilesCtrl,
      (*$U MILES/GLOBALS.OBJ *)  MilesGlobals;
 
-{ Repaint the whole table into the window (or the update region while updating). }
+{ Forget what is on screen (call once at startup): the next refresh will repaint everything. }
+procedure InitDraw;
+
+{ Repaint the whole table: first show, or an update event after the window was uncovered. }
 procedure DrawContents (window : WindowPtr);
+
+{ Repaint only what changed since the last paint. }
+procedure RefreshContents (window : WindowPtr);
 
 IMPLEMENTATION
 
 const
    statusLineY = 274;
    statusTextY = 291;
+
+var
+   shownG    : Game;        { the game state as last painted }
+   shownU    : UIState;     { the UI state as last painted }
+   haveShown : boolean;     { false until the first full paint }
+
+procedure InitDraw {};
+begin
+   haveShown := false
+end;
 
 procedure BoxToRect (var b : Box; var r : Rect);
 begin
@@ -110,16 +85,15 @@ begin
    PenPat(black)
 end;
 
-{ The thick outline that shows where the selected card can legally go. }
-procedure DrawHighlight (var r : Rect);
-var o : Rect;
+{ The target highlight: invert the outer 3 pixels of the pile.  It shows on white and black alike, }
+{ and redrawing the pile (which erases it first) takes it away again.                              }
+procedure DrawRing (var r : Rect);
+var inner : Rect;
 begin
-   o := r;
-   InsetRect(o, -4, -4);
-   PenNormal;
-   PenSize(2, 2);
-   FrameRect(o);
-   PenNormal
+   inner := r;
+   InsetRect(inner, 3, 3);
+   InvertRect(r);
+   InvertRect(inner)
 end;
 
 procedure ShowFace (k : CardKind; var r : Rect);
@@ -192,18 +166,17 @@ begin
    CenterString(r, r.bottom - 6 - fi.descent, s)
 end;
 
-{ One player's row: header (name, trip bar, miles), the seven piles, and for the }
-{ computer the backs of its cards.                                              }
-procedure DrawSide (seat : integer);
-var b, hb  : Box;
-    r, bar : Rect;
-    s, t   : Str255;
-    i, w   : integer;
-    k      : CardKind;
+{ A player's header line: the name, a 1000-mile trip bar, and the mileage as text. }
+procedure DrawHeader (seat : integer);
+var hb       : Box;
+    r, bar   : Rect;
+    s, t     : Str255;
+    w        : integer;
 begin
    SlotBox(seat, SlotBattle, hb);
-
-   { header: the name, a 1000-mile trip bar, and the mileage as text }
+   SetRect(r, 0, hb.top - 18, ContentW, hb.top - 2);
+   PenNormal;
+   EraseRect(r);
    TextMode(srcOr);
    TextFace([bold]);
    TextFont(fntCaption);
@@ -212,7 +185,6 @@ begin
    DrawString(s);
    TextFace([]);
    SetRect(bar, 130, hb.top - 16, 430, hb.top - 7);
-   PenNormal;
    FrameRect(bar);
    w := ord4(theGame.pl[seat].miles) * 298 div 1000;
    if w > 0 then begin
@@ -223,55 +195,68 @@ begin
    t := lblMiles;
    s := concat(s, ' / 1000 ', t);
    MoveTo(440, hb.top - 6);
-   DrawString(s);
-
-   { battle pile: the top card, or an empty outline }
-   SlotBox(seat, SlotBattle, b);
-   BoxToRect(b, r);
-   if theGame.pl[seat].battle <> ckNone then ShowFace(theGame.pl[seat].battle, r)
-   else DrawEmptySlot(r);
-
-   { speed pile: a Speed Limit card while limited }
-   SlotBox(seat, SlotSpeed, b);
-   BoxToRect(b, r);
-   if theGame.pl[seat].limited then ShowFace(hzLimit, r)
-   else DrawEmptySlot(r);
-
-   { the four safeties, in the order Ace, Tank, Puncture-proof, Right of Way }
-   k := sfAce;
-   for i := 0 to 3 do begin
-      SlotBox(seat, SlotSafety0 + i, b);
-      BoxToRect(b, r);
-      if theGame.pl[seat].safe[i] then ShowFace(k, r)
-      else DrawEmptySlot(r);
-      if i < 3 then k := succ(k)
-   end;
-
-   { miles }
-   SlotBox(seat, SlotMiles, b);
-   BoxToRect(b, r);
-   DrawMilesBox(theGame.pl[seat].miles, r);
-
-   { the computer's hidden hand }
-   if seat = 1 then
-      for i := 1 to theGame.pl[1].handN do begin
-         OppHandBox(i, b);
-         BoxToRect(b, r);
-         ShowBack(r)
-      end
+   DrawString(s)
 end;
 
-procedure DrawMiddle;
+{ One of a player's seven piles (and its target ring, if it is the target). }
+procedure DrawSlot (seat, slot : integer);
+var b : Box;
+    r : Rect;
+    k : CardKind;
+    i : integer;
+begin
+   SlotBox(seat, slot, b);
+   BoxToRect(b, r);
+   if slot = SlotBattle then begin
+      if theGame.pl[seat].battle <> ckNone then ShowFace(theGame.pl[seat].battle, r)
+      else DrawEmptySlot(r)
+   end
+   else if slot = SlotSpeed then begin
+      if theGame.pl[seat].limited then ShowFace(hzLimit, r)
+      else DrawEmptySlot(r)
+   end
+   else if slot = SlotMiles then
+      DrawMilesBox(theGame.pl[seat].miles, r)
+   else begin
+      k := sfAce;
+      for i := 1 to slot - SlotSafety0 do
+         k := succ(k);
+      if theGame.pl[seat].safe[slot - SlotSafety0] then ShowFace(k, r)
+      else DrawEmptySlot(r)
+   end;
+   if UITarget(ui, theGame, seat) = slot then DrawRing(r)
+end;
+
+{ The computer's hidden hand: card backs on the right of its row. }
+procedure DrawBacks;
+var b : Box;
+    r : Rect;
+    i : integer;
+begin
+   OppHandBox(1, b);
+   SetRect(r, b.left - 4, b.top, ContentW, b.bottom);
+   EraseRect(r);
+   for i := 1 to theGame.pl[1].handN do begin
+      OppHandBox(i, b);
+      BoxToRect(b, r);
+      ShowBack(r)
+   end
+end;
+
+{ The draw pile: a small stack of backs with the count on top. }
+procedure ShowPile;
 var b    : Box;
     r, c : Rect;
-    s, t : Str255;
+    s    : Str255;
     fi   : FontInfo;
     j    : integer;
 begin
-   { the draw pile: a small stack of backs with the count on top }
    DrawPileBox(b);
+   BoxToRect(b, r);
+   EraseRect(r);
    for j := 2 downto 0 do begin
-      SetRect(r, b.left + (2 - j) * 2, b.top + j * 2, b.left + (2 - j) * 2 + CardW, b.top + j * 2 + CardH);
+      SetRect(r, b.left + (2 - j) * 2, b.top + j * 2,
+                 b.left + (2 - j) * 2 + CardW, b.top + j * 2 + CardH);
       ShowBack(r)
    end;
    SetRect(c, r.left + 12, r.top + 15, r.right - 12, r.bottom - 15);
@@ -282,16 +267,31 @@ begin
    TextFace([]);
    GetFontInfo(fi);
    NumToStr(RemainingDeck(theGame), s);
-   CenterString(c, c.top + (c.bottom - c.top + fi.ascent - fi.descent) div 2, s);
+   CenterString(c, c.top + (c.bottom - c.top + fi.ascent - fi.descent) div 2, s)
+end;
 
-   { the discard pile }
+procedure DrawDiscardArea;
+var b : Box;
+    r : Rect;
+begin
    DiscardBox(b);
    BoxToRect(b, r);
    if theGame.discardTop <> ckNone then ShowFace(theGame.discardTop, r)
-   else DrawEmptySlot(r);
+   else DrawEmptySlot(r)
+end;
 
-   { the score line }
+{ The running scores. }
+procedure DrawScores;
+var b    : Box;
+    r    : Rect;
+    s, t : Str255;
+begin
+   DiscardBox(b);
+   SetRect(r, 130, b.top, 326, b.bottom);
+   PenNormal;
+   EraseRect(r);
    TextFont(fntCaption);
+   TextMode(srcOr);
    TextFace([bold]);
    s := lblMatch;
    MoveTo(136, b.top + 14);
@@ -309,11 +309,40 @@ begin
    DrawString(s)
 end;
 
-procedure DrawHand;
-var i    : integer;
-    b    : Box;
-    r    : Rect;
+{ The Next Match button while a match is over; its spot is blank otherwise. }
+procedure DrawNextButton;
+var b  : Box;
+    r  : Rect;
+    s  : Str255;
+    fi : FontInfo;
 begin
+   NextBox(b);
+   BoxToRect(b, r);
+   PenNormal;
+   EraseRect(r);
+   if theGame.ph = phOver then begin
+      PenSize(2, 2);
+      FrameRect(r);
+      PenNormal;
+      TextMode(srcOr);
+      TextFont(fntCaption);
+      TextFace([bold]);
+      GetFontInfo(fi);
+      s := lblNext;
+      CenterString(r, r.top + ((r.bottom - r.top) + fi.ascent - fi.descent) div 2, s);
+      TextFace([])
+   end
+end;
+
+{ Your hand, raised card and all.  The whole strip is erased first (a lifted card used to be lower). }
+procedure DrawHandStrip;
+var i : integer;
+    b : Box;
+    r : Rect;
+begin
+   SetRect(r, 0, 204, ContentW, 264);
+   PenNormal;
+   EraseRect(r);
    for i := 1 to theGame.pl[0].handN do begin
       HandBox(i, i = ui.sel, b);
       BoxToRect(b, r);
@@ -321,36 +350,21 @@ begin
    end
 end;
 
-{ Outline the pile the selected card would naturally go to, on whichever side(s) allow it. }
-procedure DrawTargets;
-var k    : CardKind;
-    b    : Box;
+{ The status text under the separator line; messages about the computer's move name its card. }
+procedure DrawStatusText;
+var s, t : Str255;
+    code : integer;
     r    : Rect;
-    slot : integer;
 begin
-   if (ui.sel >= 1) and (theGame.ph = phPlay) and (theGame.turn = 0) then begin
-      k := theGame.pl[0].hand[ui.sel];
-      slot := NaturalSlot(k);
-      if CheckPlay(theGame, ui.sel, tgSelf) = ErrOK then begin
-         SlotBox(0, slot, b);
-         BoxToRect(b, r);
-         DrawHighlight(r)
-      end;
-      if CheckPlay(theGame, ui.sel, tgOpponent) = ErrOK then begin
-         SlotBox(1, slot, b);
-         BoxToRect(b, r);
-         DrawHighlight(r)
-      end
-   end
-end;
-
-procedure DrawStatus;
-var s : Str255;
-begin
+   SetRect(r, 0, statusLineY + 1, ContentW, ContentH);
    PenNormal;
-   MoveTo(0, statusLineY);
-   LineTo(ContentW - 1, statusLineY);
-   GetPhrase(phStatusBase + StatusMsg(ui, theGame), s);
+   EraseRect(r);
+   code := StatusMsg(ui, theGame);
+   GetPhrase(phStatusBase + code, s);
+   if (code >= MsgCpuPlayed) and (code <= MsgCpuDiscard) then begin
+      t := capText[ui.lastCard];
+      s := concat(s, ' ', t)
+   end;
    TextFont(fntCaption);
    TextMode(srcOr);
    TextFace([]);
@@ -358,21 +372,98 @@ begin
    DrawString(s)
 end;
 
+procedure Remember;
+begin
+   shownG := theGame;
+   shownU := ui;
+   haveShown := true
+end;
+
 procedure DrawContents {window : WindowPtr};
-var all : Rect;
+var all  : Rect;
+    seat : integer;
+    slot : integer;
 begin
    if window = nil then exit(DrawContents);
    SetPort(window);
    SetRect(all, 0, 0, ContentW, ContentH);
    ClipRect(all);
+   PenNormal;
    EraseRect(all);
-   DrawSide(1);
-   DrawMiddle;
-   DrawSide(0);
-   DrawHand;
-   DrawTargets;
+   for seat := 1 downto 0 do begin
+      DrawHeader(seat);
+      for slot := 0 to NumSlots - 1 do
+         DrawSlot(seat, slot)
+   end;
+   DrawBacks;
+   ShowPile;
+   DrawDiscardArea;
+   DrawScores;
    DrawNextButton;
-   DrawStatus
+   DrawHandStrip;
+   MoveTo(0, statusLineY);
+   LineTo(ContentW - 1, statusLineY);
+   DrawStatusText;
+   Remember
+end;
+
+procedure RefreshContents {window : WindowPtr};
+var all         : Rect;
+    seat, slot  : integer;
+    i           : integer;
+    tOld, tNew  : integer;
+    changed     : boolean;
+    handChanged : boolean;
+begin
+   if window = nil then exit(RefreshContents);
+   if not haveShown then begin
+      DrawContents(window);
+      exit(RefreshContents)
+   end;
+   SetPort(window);
+   SetRect(all, 0, 0, ContentW, ContentH);
+   ClipRect(all);
+
+   for seat := 1 downto 0 do begin
+      if shownG.pl[seat].miles <> theGame.pl[seat].miles then DrawHeader(seat);
+      tOld := UITarget(shownU, shownG, seat);
+      tNew := UITarget(ui, theGame, seat);
+      for slot := 0 to NumSlots - 1 do begin
+         { a pile is redrawn if its contents changed, or it gained or lost the target ring }
+         changed := ((tOld = slot) and (tNew <> slot)) or ((tOld <> slot) and (tNew = slot));
+         if slot = SlotBattle then begin
+            if shownG.pl[seat].battle <> theGame.pl[seat].battle then changed := true
+         end
+         else if slot = SlotSpeed then begin
+            if shownG.pl[seat].limited <> theGame.pl[seat].limited then changed := true
+         end
+         else if slot = SlotMiles then begin
+            if shownG.pl[seat].miles <> theGame.pl[seat].miles then changed := true
+         end
+         else begin
+            if shownG.pl[seat].safe[slot - SlotSafety0] <> theGame.pl[seat].safe[slot - SlotSafety0] then
+               changed := true
+         end;
+         if changed then DrawSlot(seat, slot)
+      end
+   end;
+
+   if shownG.pl[1].handN <> theGame.pl[1].handN then DrawBacks;
+   if RemainingDeck(shownG) <> RemainingDeck(theGame) then ShowPile;
+   if shownG.discardTop <> theGame.discardTop then DrawDiscardArea;
+   if (shownU.match[0] <> ui.match[0]) or (shownU.match[1] <> ui.match[1]) then DrawScores;
+   if ((shownG.ph = phOver) and (theGame.ph <> phOver)) or
+      ((shownG.ph <> phOver) and (theGame.ph = phOver)) then DrawNextButton;
+
+   handChanged := (shownG.pl[0].handN <> theGame.pl[0].handN) or (shownU.sel <> ui.sel);
+   for i := 1 to theGame.pl[0].handN do
+      if shownG.pl[0].hand[i] <> theGame.pl[0].hand[i] then handChanged := true;
+   if handChanged then DrawHandStrip;
+
+   if (StatusMsg(shownU, shownG) <> StatusMsg(ui, theGame)) or (shownU.lastCard <> ui.lastCard) then
+      DrawStatusText;
+
+   Remember
 end;
 
 end.

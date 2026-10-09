@@ -58,11 +58,12 @@ end;
 {  Painting, menus, game flow                                                  }
 {==============================================================================}
 
+{ After a game action: repaint only what changed (no whole-window flash). }
 procedure Repaint;
 begin
    if myWindow <> nil then begin
       SetPort(myWindow);
-      DrawContents(myWindow)
+      RefreshContents(myWindow)
    end
 end;
 
@@ -316,6 +317,7 @@ begin
    haveGame  := false;
    nextAi    := 0;
    UIInit(ui);
+   InitDraw;
 
    { (3) The private heap, carved out of the static myZone array. }
    InitHeap(@myZone[0], @myZone[maxHeap], @OutOfHeapSpace);

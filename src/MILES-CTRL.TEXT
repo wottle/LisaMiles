@@ -41,11 +41,12 @@ procedure UIInit(var u: UIState);
 procedure UINewHand(var u: UIState; var g: Game; seed: longint);
 procedure UINewGame(var u: UIState; var g: Game; seed: longint);
 procedure UINextHand(var u: UIState; var g: Game);
-{ now = the event's time, dblDelay = the double-click interval: the same units (hundredths of a second). }
+{ now = the event's time, dblDelay = the double-click interval (same units: hundredths of a second). }
 procedure UIClick(var u: UIState; var g: Game; x, y: integer; now, dblDelay: longint; var ev: UIEvent);
 procedure UIAdvance(var u: UIState; var g: Game; var ev: UIEvent);
 procedure UICoupAnswer(var u: UIState; var g: Game; useCoup: boolean; var ev: UIEvent);
 function  NaturalSlot(k: CardKind): integer;
+function  UITarget(var u: UIState; var g: Game; seat: integer): integer;
 function  StatusMsg(var u: UIState; var g: Game): integer;
 
 implementation
@@ -69,6 +70,25 @@ begin
   u.sel := 0;
   u.msg := MsgNone;
   u.handScored := false
+end;
+
+{ Which pile on seat's side should be highlighted for the selected card?  -1 for none.  Only on your }
+{ own turn: your side (seat 0) for a card you can play on yourself, the computer's side (seat 1) for }
+{ a hazard you can play on it.                                                                     }
+function UITarget(var u: UIState; var g: Game; seat: integer): integer;
+var r: integer; k: CardKind;
+begin
+  r := -1;
+  if (u.sel >= 1) and (g.ph = phPlay) and (g.turn = 0) then begin
+    k := g.pl[0].hand[u.sel];
+    if seat = 0 then begin
+      if CheckPlay(g, u.sel, tgSelf) = ErrOK then r := NaturalSlot(k)
+    end
+    else begin
+      if CheckPlay(g, u.sel, tgOpponent) = ErrOK then r := NaturalSlot(k)
+    end
+  end;
+  UITarget := r
 end;
 
 { New Game: forget every score and deal a fresh match. }
