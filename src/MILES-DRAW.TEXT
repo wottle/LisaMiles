@@ -500,7 +500,7 @@ begin
    if RemainingDeck(shownG) <> RemainingDeck(theGame) then ShowPile;
    if shownG.discardTop <> theGame.discardTop then DrawDiscardArea;
    if (shownU.match[0] <> ui.match[0]) or (shownU.match[1] <> ui.match[1]) then DrawScores;
-   wasBtn := (shownG.ph = phOver) and (not shownU.gameOver);     { was / is Next Match showing? }
+   wasBtn := (shownG.ph = phOver) and (not shownU.gameOver);   { was / is Next Match showing? }
    isBtn := (theGame.ph = phOver) and (not ui.gameOver);
    if (wasBtn and (not isBtn)) or ((not wasBtn) and isBtn) then DrawNextButton;
 

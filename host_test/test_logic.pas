@@ -119,6 +119,7 @@ begin
   g.pl[0].n200 := 1;
   CheckEq(CheckPlay(g, 4, tgSelf), ErrOK, 'second 200 ok');
   g.pl[0].n200 := 0;
+  g.pl[0].extended := true;                 { positions past 700 only exist after extending }
   g.pl[0].miles := 800;
   CheckEq(CheckPlay(g, 4, tgSelf), ErrOK, '800+200 = exactly 1000 ok');
   g.pl[0].miles := 825;
@@ -127,6 +128,7 @@ begin
   CheckEq(CheckPlay(g, 2, tgSelf), ErrOver, '975+50 overshoots');
   CheckEq(CheckPlay(g, 1, tgSelf), ErrOK, '975+25 = exactly 1000 ok');
   g.pl[0].miles := 0;
+  g.pl[0].extended := false;
   g.pl[0].battle := hzAccident;
   CheckEq(CheckPlay(g, 1, tgSelf), ErrBlocked, 'accident blocks moving');
   g.pl[0].battle := rmRepairs;
@@ -368,6 +370,7 @@ begin
   SetHand(g, 0, ck25, ck25, ck25, ck25, ck25, ck25);
   g.pl[0].battle := rmGo;
   g.pl[0].miles := 975;
+  g.pl[0].extended := true;
   DoPlay(g, 1, tgSelf, err);
   CheckEq(err, ErrOK, 'win: 975+25 ok');
   Check(g.ph = phOver, 'win: hand over');
@@ -377,6 +380,7 @@ begin
   SetHand(g, 0, ck25, ck25, ck25, ck25, ck25, ck25);
   g.pl[0].battle := rmGo;
   g.pl[0].miles := 975;
+  g.pl[0].extended := true;
   g.deckNext := NumCards + 1;
   DoPlay(g, 1, tgSelf, err);
   Check(g.delayedTrip, 'win: delayed once the pile is empty')
@@ -513,12 +517,14 @@ begin
   CheckEq(HandPoints(g, 0), 700 + 400 + 300 + 500, 'ext: miles + trip + safe trip + shutout');
   CheckEq(CheckInvariants(g), 0, 'ext: the finished state is consistent');
 
-  { passing 700 without landing on it does not ask }
+  { passing 700 is not allowed: the play is refused and nothing changes }
   FreshPlay(g);
   SetHand(g, 0, ck75, ck25, ck25, ck25, ck25, ck25);
   g.pl[0].battle := rmGo; g.pl[0].miles := 650;
   DoPlay(g, 1, tgSelf, err);
-  Check(g.ph = phDraw, 'ext: 650+75 = 725 just passes 700 with no question');
+  CheckEq(err, ErrPast700, 'ext: 650+75 would pass 700 and is refused');
+  CheckEq(g.pl[0].miles, 650, 'ext: ...and the miles are unchanged');
+  Check(g.ph = phPlay, 'ext: ...and it is still your turn');
 
   { a 200 can land on 700 too }
   FreshPlay(g);
@@ -541,11 +547,11 @@ begin
   DoPlay(g, 1, tgSelf, err);
   Check(g.ph = phOver, 'ext: an extended trip still finishes at exactly 1000');
   CheckEq(HandPoints(g, 0), 1000 + 400 + 200 + 300 + 500, 'ext: the extension adds 200');
+  { 1000 can only be reached by extending, so a player who stops has never been past 700 }
   FreshPlay(g);
   SetHand(g, 0, ck25, ck25, ck25, ck25, ck25, ck25);
   g.pl[0].battle := rmGo; g.pl[0].miles := 975;
-  DoPlay(g, 1, tgSelf, err);
-  CheckEq(HandPoints(g, 0), 1000 + 400 + 300 + 500, 'ext: no extension bonus without extending');
+  CheckEq(CheckPlay(g, 1, tgSelf), ErrPast700, 'ext: 975 without extending is not a position you can play from');
 
   { the extension bonus belongs to the winner only }
   g.pl[1].extended := true;
@@ -569,6 +575,44 @@ begin
   g.pl[1].miles := 700;
   g.pl[0].miles := 300;
   Check(AIExtend(g), 'ai ext: works for either seat')
+end;
+
+procedure TestNoSkip700;
+begin
+  { before extending, 700 is a wall: you may stop short of it or land on it, never pass it }
+  FreshPlay(g);
+  SetHand(g, 0, ck100, ck50, ck25, ck75, ck200, ck25);
+  g.pl[0].battle := rmGo; g.pl[0].miles := 650;
+  CheckEq(CheckPlay(g, 1, tgSelf), ErrPast700, 'no skip: 650+100 would pass 700');
+  CheckEq(CheckPlay(g, 2, tgSelf), ErrOK, 'no skip: 650+50 lands on 700');
+  CheckEq(CheckPlay(g, 3, tgSelf), ErrOK, 'no skip: 650+25 stays short of 700');
+  CheckEq(CheckPlay(g, 4, tgSelf), ErrPast700, 'no skip: 650+75 would pass 700');
+  CheckEq(CheckPlay(g, 5, tgSelf), ErrPast700, 'no skip: 650+200 would pass 700');
+  g.pl[0].miles := 500;
+  CheckEq(CheckPlay(g, 5, tgSelf), ErrOK, 'no skip: 500+200 lands on 700');
+  g.pl[0].miles := 600;
+  CheckEq(CheckPlay(g, 5, tgSelf), ErrPast700, 'no skip: 600+200 would pass 700');
+  g.pl[0].miles := 0;
+  CheckEq(CheckPlay(g, 5, tgSelf), ErrOK, 'no skip: a fresh start may play a 200');
+
+  { once you have extended the limit is 1000 }
+  g.pl[0].extended := true;
+  g.pl[0].miles := 700;
+  CheckEq(CheckPlay(g, 1, tgSelf), ErrOK, 'no skip: after extending, 700+100 is fine');
+  g.pl[0].miles := 975;
+  CheckEq(CheckPlay(g, 2, tgSelf), ErrOver, 'no skip: after extending, 975+50 passes 1000');
+  CheckEq(CheckPlay(g, 3, tgSelf), ErrOK, 'no skip: ...but 975+25 lands on it')
+end;
+
+procedure TestAILandsOn700;
+var mv: PlayMove;
+begin
+  { with 500 miles, the 200 that lands exactly on 700 beats the 100 the AI would normally prefer }
+  FreshPlay(g);
+  SetHand(g, 0, ck100, ck200, ck25, ck25, ck25, ck25);
+  g.pl[0].battle := rmGo; g.pl[0].miles := 500;
+  AIChoose(g, mv);
+  CheckEq(mv.hand, 2, 'ai 700: it takes the card that lands on exactly 700')
 end;
 
 procedure TestScoring;
@@ -636,6 +680,7 @@ begin
   SetHand(g, 0, ck100, ck25, rmGo, hzStop, ck75, ck50);
   g.pl[0].battle := rmGo;
   g.pl[0].miles := 975;
+  g.pl[0].extended := true;
   AIChoose(g, mv);
   CheckEq(mv.hand, 2, 'AI takes the winning 25');
 
@@ -700,7 +745,7 @@ begin
   g.tripBy := 0;
   Check(CheckInvariants(g) <> 0, 'invariants: tripBy without 1000 miles');
   FreshPlay(g);
-  g.tripBy := 0; g.pl[0].miles := 1000;
+  g.tripBy := 0; g.pl[0].miles := 1000; g.pl[0].extended := true;
   CheckEq(CheckInvariants(g), 0, 'invariants: genuine trip passes');
   FreshPlay(g);
   g.turn := 2;
@@ -730,6 +775,8 @@ begin
   TestCanPlayAny;
   TestCuredHazardStaysCured;
   TestScoring;
+  TestNoSkip700;
+  TestAILandsOn700;
   TestExtension;
   TestAIExtend;
   TestLegalMoves;

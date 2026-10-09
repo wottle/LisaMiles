@@ -338,18 +338,18 @@ begin
   UINewHand(u, g, 3);
   SetHand(g, 0, ck25, ck25, ck25, ck25, ck25, ck25);
   g.pl[0].battle := rmGo;
-  g.pl[0].miles := 975;
+  g.pl[0].miles := 975; g.pl[0].extended := true;
   g.turn := 0; g.ph := phPlay;
   ClickHand(1, ev);
   ClickSlot(0, SlotMiles, ev);
   Check(ev = ueHandOver, 'over: reaching 1000 ends the hand');
-  CheckEq(u.match[0], 1000 + 400 + 300 + 500, 'over: the win is scored into the match');
+  CheckEq(u.match[0], 1000 + 400 + 200 + 300 + 500, 'over: the win is scored into the match');
   UIAdvance(u, g, ev);
   UIAdvance(u, g, ev);
-  CheckEq(u.match[0], 1000 + 400 + 300 + 500, 'over: it is never scored twice');
+  CheckEq(u.match[0], 1000 + 400 + 200 + 300 + 500, 'over: it is never scored twice');
   CheckEq(StatusMsg(u, g), MsgHandOver, 'over: status says the hand is over');
   UINewHand(u, g, 4);
-  CheckEq(u.match[0], 1000 + 400 + 300 + 500, 'over: the match total survives a new hand');
+  CheckEq(u.match[0], 1000 + 400 + 200 + 300 + 500, 'over: the match total survives a new hand');
   Check(g.ph = phDraw, 'over: a new hand starts at the draw');
   CheckEq(StatusMsg(u, g), MsgYourDraw, 'over: ...and says to draw')
 end;
@@ -442,12 +442,12 @@ begin
   FreshPlay;
   SetHand(g, 0, ck25, ck25, ck25, ck25, ck25, ck25);
   g.pl[0].battle := rmGo;
-  g.pl[0].miles := 975;
+  g.pl[0].miles := 975; g.pl[0].extended := true;
   ClickHand(1, ev);
   ClickSlot(0, SlotMiles, ev);
   Check(ev = ueHandOver, 'next: the match ends at 1000');
   before := u.match[0];
-  CheckEq(before, 1000 + 400 + 300 + 500, 'next: and is scored');
+  CheckEq(before, 1000 + 400 + 200 + 300 + 500, 'next: and is scored');
   ClickHand(1, ev);
   Check(ev = ueNone, 'next: other clicks do nothing once the match is over');
   NextBox(b); ClickBox(b, ev);
@@ -578,11 +578,11 @@ begin
   FreshPlay;
   SetHand(g, 0, ck25, ck25, ck25, ck25, ck25, ck25);
   g.pl[0].battle := rmGo;
-  g.pl[0].miles := 975;
+  g.pl[0].miles := 975; g.pl[0].extended := true;
   ClickHandAt(1, 1000, ev);
   ClickHandAt(1, 1010, ev);
   Check(ev = ueHandOver, 'dbl: the winning card ends the match');
-  CheckEq(u.match[0], 1000 + 400 + 300 + 500, 'dbl: ...and it is scored')
+  CheckEq(u.match[0], 1000 + 400 + 200 + 300 + 500, 'dbl: ...and it is scored')
 end;
 
 procedure TestDoubleClickRefusals;
@@ -762,12 +762,12 @@ begin
   { reaching 5000 ends the whole game; the higher total wins }
   FreshPlay;
   SetHand(g, 0, ck25, ck25, ck25, ck25, ck25, ck25);
-  g.pl[0].battle := rmGo; g.pl[0].miles := 975;
+  g.pl[0].battle := rmGo; g.pl[0].miles := 975; g.pl[0].extended := true;
   u.match[0] := 3000; u.match[1] := 2000;
   ClickHand(1, ev);
   ClickSlot(0, SlotMiles, ev);
   Check(ev = ueHandOver, 'over5000: the winning match ends');
-  CheckEq(u.match[0], 3000 + 1000 + 400 + 300 + 500, 'over5000: and is added to the total');
+  CheckEq(u.match[0], 3000 + 1000 + 400 + 200 + 300 + 500, 'over5000: and is added to the total');
   Check(u.gameOver, 'over5000: 5000 reached means the game is over');
   CheckEq(u.winner, 0, 'over5000: you have the higher score');
   CheckEq(StatusMsg(u, g), MsgGameOver, 'over5000: the status says the game is over');

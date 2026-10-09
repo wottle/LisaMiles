@@ -16,7 +16,7 @@ const
   ErrOK = 0;         ErrPhase = 1;       ErrNoCard = 2;      ErrNeedGo = 3;
   ErrBlocked = 4;    ErrLimit = 5;       Err200 = 6;         ErrOver = 7;
   ErrWrongRemedy = 8; ErrBadTarget = 9;  ErrImmune = 10;     ErrNoEffect = 11;
-  ErrNoNeed = 12;
+  ErrNoNeed = 12;     ErrPast700 = 13;
 
   PtSafety = 100;  PtCoup = 300;  PtAllSafe = 300;  PtTrip = 400;
   PtDelayed = 300; PtSafeTrip = 300; PtShutout = 500;
@@ -279,7 +279,8 @@ begin
     end
     else if p.limited and (not p.safe[3]) and (DistValue(k) > 50) then r := ErrLimit
     else if (k = ck200) and (p.n200 >= Max200) then r := Err200
-    else if p.miles + DistValue(k) > TripMiles then r := ErrOver
+    else if p.extended and (p.miles + DistValue(k) > TripMiles) then r := ErrOver
+    else if (not p.extended) and (p.miles + DistValue(k) > ExtendMiles) then r := ErrPast700
   end
   else if k = rmGo then begin
     if p.safe[3] then r := ErrNoNeed
@@ -352,7 +353,8 @@ begin
   if e = ErrBadTarget then s := 'That card cannot go there.';
   if e = ErrImmune then s := 'They are protected by a safety.';
   if e = ErrNoEffect then s := 'That would have no effect right now.';
-  if e = ErrNoNeed then s := 'You do not need that.'
+  if e = ErrNoNeed then s := 'You do not need that.';
+  if e = ErrPast700 then s := 'You must land on exactly 700 miles first.'
 end;
 
 function HandIndexOf(var p: PlayerState; k: CardKind): integer;
@@ -619,6 +621,7 @@ begin
   else if IsDistance(k) then begin
     v := DistValue(k);
     if g.pl[s].miles + v = TripMiles then MoveValue := 99
+    else if (not g.pl[s].extended) and (g.pl[s].miles + v = ExtendMiles) then MoveValue := 98
     else if k = ck200 then MoveValue := 30
     else MoveValue := 40 + v div 5
   end
@@ -661,7 +664,10 @@ begin
     tot := tot + g.pl[p].handN;
     if (g.pl[p].handN < 0) or (g.pl[p].handN > 7) then r := 1;
     if (g.pl[p].miles < 0) or (g.pl[p].miles > TripMiles) then r := 2;
-    if (g.pl[p].n200 < 0) or (g.pl[p].n200 > Max200) then r := 3
+    if (g.pl[p].n200 < 0) or (g.pl[p].n200 > Max200) then r := 3;
+    { 700 is a wall until the player extends, and only a player at 700 or more can have extended }
+    if (not g.pl[p].extended) and (g.pl[p].miles > ExtendMiles) then r := 11;
+    if g.pl[p].extended and (g.pl[p].miles < ExtendMiles) then r := 12
   end;
   if tot + g.gone <> NumCards then r := 4;
   for p := 0 to 1 do begin

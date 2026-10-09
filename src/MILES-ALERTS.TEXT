@@ -89,15 +89,15 @@ card away.  Or just double-click a card to play it where it belongs.^L^L
 You need a Go card to start, and a remedy for every hazard.  Safety cards
 protect you for good, and playing one gives you another turn.  Only two
 200-mile cards per match.^L^L
-Land on exactly 700 miles and you may stop there, or extend to 1000 for a 200
-point bonus.  When the draw pile runs out, a player with no card to play is
+You cannot pass 700 miles: land on it exactly, then stop there or extend to 1000
+for a 200 point bonus.  When the draw pile runs out, a player with no card to play is
 skipped, and the match ends when neither can play.  The first player whose
 score reaches 5000 wins the game.
 
 ; -- Extend or stop at exactly 700 miles: OK extends, Cancel stops here.
 50 caution ok alert
 You have gone exactly 700 miles!^L^L
-OK extends the trip to 1000 miles, with a 200 point bonus if you make it.^L
+OK extends the trip to 1000 miles (finish exactly on 1000 for a 200 point bonus).^L
 Cancel stops here: the trip is complete and the match ends.
 
 ; ==== PHRASES (number-only headers, one text line each, each ends with a blank line)
@@ -137,6 +137,10 @@ That would have no effect right now.
 
 922
 You do not need that.
+
+; -- 923: you tried to play past 700 miles before extending.
+923
+You must land on exactly 700 miles first.
 
 ; -- 930..936: the UI's own status text (910 + code 20..26).
 930
