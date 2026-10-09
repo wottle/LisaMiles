@@ -33,7 +33,7 @@ begin
   while (g.ph <> phOver) and (steps < MaxSteps) and (bad = 0) do begin
     steps := steps + 1;
     if g.ph = phDraw then DrawCard(g)
-    else if g.ph = phCoup then ResolveCoup(g, true)
+    else if g.ph = phCoup then ResolveCoup(g, (sd + steps) mod 3 <> 0)   { decline about 1 in 3 }
     else begin
       if ((g.turn = 0) and smart0) or ((g.turn = 1) and smart1) then AIChoose(g, mv)
       else RandomChoose(g, mv);

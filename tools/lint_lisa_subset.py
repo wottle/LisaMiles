@@ -14,6 +14,7 @@ FORBIDDEN = [
     (r"\bresult\b", "Result is Free Pascal only; assign to the function name"),
     (r"\botherwise\b", "otherwise differs between compilers; use if-chains"),
     (r"\buses\b", "MILES-LOGIC must not depend on any unit"),
+    (r"\bstring\b(?!\s*\[)", "unsized string: declare a sized one such as string[63]"),
 ]
 
 

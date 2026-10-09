@@ -479,6 +479,56 @@ begin
   CheckEq(mv.hand, 2, 'AI prefers mileage to spending a safety early')
 end;
 
+procedure TestCoupRoWCures;
+var err: integer;
+begin
+  { (a) victim is moving but already limited, hit by Stop, answers with Right of Way }
+  SetupCoup(g, hzStop, sfRoW);
+  g.pl[1].limited := true;
+  DoPlay(g, 1, tgOpponent, err);
+  CheckEq(err, ErrOK, 'coup RoW (a): stop played on a limited mover');
+  ResolveCoup(g, true);
+  Check(g.pl[1].safe[3], 'coup RoW (a): RoW in play');
+  Check(not g.pl[1].limited, 'coup RoW (a): RoW clears the old limit');
+
+  { (b) victim is stopped, hit by Limit, answers with Right of Way }
+  SetupCoup(g, hzLimit, sfRoW);
+  g.pl[1].battle := hzStop;
+  DoPlay(g, 1, tgOpponent, err);
+  CheckEq(err, ErrOK, 'coup RoW (b): limit played on a stopped car');
+  ResolveCoup(g, true);
+  Check(g.pl[1].safe[3], 'coup RoW (b): RoW in play');
+  Check(g.pl[1].battle = rmGo, 'coup RoW (b): RoW clears the old stop');
+  Check(not g.pl[1].limited, 'coup RoW (b): limit undone')
+end;
+
+procedure TestInvariantsCatchBadStates;
+begin
+  FreshPlay(g);
+  CheckEq(CheckInvariants(g), 0, 'invariants: clean state passes');
+  FreshPlay(g);
+  g.pl[0].safe[3] := true; g.pl[0].limited := true;
+  Check(CheckInvariants(g) <> 0, 'invariants: RoW while limited is inconsistent');
+  FreshPlay(g);
+  g.pl[0].safe[3] := true; g.pl[0].battle := hzStop;
+  Check(CheckInvariants(g) <> 0, 'invariants: RoW while stopped is inconsistent');
+  FreshPlay(g);
+  g.pl[1].viaCoup[2] := true;
+  Check(CheckInvariants(g) <> 0, 'invariants: coup flag without the safety');
+  FreshPlay(g);
+  g.tripBy := 0;
+  Check(CheckInvariants(g) <> 0, 'invariants: tripBy without 1000 miles');
+  FreshPlay(g);
+  g.tripBy := 0; g.pl[0].miles := 1000;
+  CheckEq(CheckInvariants(g), 0, 'invariants: genuine trip passes');
+  FreshPlay(g);
+  g.turn := 2;
+  Check(CheckInvariants(g) <> 0, 'invariants: turn must be 0 or 1');
+  FreshPlay(g);
+  g.coupSeat := 1;
+  Check(CheckInvariants(g) <> 0, 'invariants: stale coupSeat outside the coup phase')
+end;
+
 {@TESTS}
 
 begin
@@ -499,6 +549,8 @@ begin
   TestScoring;
   TestLegalMoves;
   TestAI;
+  TestCoupRoWCures;
+  TestInvariantsCatchBadStates;
   {@CALLS}
   Summary
 end.

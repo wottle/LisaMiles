@@ -24,6 +24,12 @@ class LintTests(unittest.TestCase):
         self.assertEqual(self.kinds("(* uses break *)\n"), [])
         self.assertEqual(self.kinds("s := 'exit(x)';\n"), [])
 
+    def test_unsized_string_flagged_but_sized_string_ok(self):
+        self.assertTrue(self.kinds("function f(e: integer): string;\n"))
+        self.assertTrue(self.kinds("var s: String;\n"))
+        self.assertEqual(self.kinds("type ErrStr = string[63];\n"), [])
+        self.assertEqual(self.kinds("type ErrStr = string [63];\n"), [])
+
     def test_non_ascii_flagged(self):
         self.assertTrue(self.kinds("x := 1; { café }\n"))
 

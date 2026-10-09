@@ -67,6 +67,8 @@ type
     m : array[1..24] of PlayMove;
   end;
 
+  ErrStr = string[63];
+
 function  Opp(s: integer): integer;
 function  KindCount(k: CardKind): integer;
 function  DistValue(k: CardKind): integer;
@@ -81,7 +83,7 @@ function  RemainingDeck(var g: Game): integer;
 procedure NewGame(var g: Game; seed: longint);
 function  CanMoveNow(var p: PlayerState): boolean;
 function  CheckPlay(var g: Game; handIdx: integer; t: Target): integer;
-function  ErrText(e: integer): string;
+function  ErrText(e: integer): ErrStr;
 function  HandIndexOf(var p: PlayerState; k: CardKind): integer;
 procedure DrawCard(var g: Game);
 procedure DoPlay(var g: Game; handIdx: integer; t: Target; var err: integer);
@@ -325,7 +327,7 @@ begin
   end
 end;
 
-function ErrText(e: integer): string;
+function ErrText(e: integer): ErrStr;
 begin
   ErrText := 'That play is not allowed.';
   if e = ErrOK then ErrText := '';
@@ -394,6 +396,19 @@ begin
     EndTurn(g)
 end;
 
+{ Put a safety in play and apply the cure it gives; used by a normal play and by a coup. }
+procedure ApplySafety(var p: PlayerState; k: CardKind);
+begin
+  p.safe[SafetyIdx(k)] := true;
+  if (k = sfAce) and (p.battle = hzAccident) then p.battle := rmRepairs;
+  if (k = sfTank) and (p.battle = hzOutOfGas) then p.battle := rmGas;
+  if (k = sfPunct) and (p.battle = hzFlat) then p.battle := rmSpare;
+  if k = sfRoW then begin
+    p.limited := false;
+    if p.battle = hzStop then p.battle := rmGo
+  end
+end;
+
 procedure ApplySelf(var g: Game; s: integer; k: CardKind);
 begin
   with g.pl[s] do begin
@@ -404,16 +419,7 @@ begin
     else if k = rmGo then battle := rmGo
     else if (k = rmRepairs) or (k = rmGas) or (k = rmSpare) then battle := k
     else if k = rmEndLimit then limited := false
-    else begin
-      safe[SafetyIdx(k)] := true;
-      if (k = sfAce) and (battle = hzAccident) then battle := rmRepairs;
-      if (k = sfTank) and (battle = hzOutOfGas) then battle := rmGas;
-      if (k = sfPunct) and (battle = hzFlat) then battle := rmSpare;
-      if k = sfRoW then begin
-        limited := false;
-        if battle = hzStop then battle := rmGo
-      end
-    end
+    else ApplySafety(g.pl[s], k)
   end
 end;
 
@@ -468,10 +474,10 @@ begin
     g.coupSeat := -1;
     if useCoup and (i > 0) then begin
       RemoveFromHand(g, c, i);
-      g.pl[c].safe[SafetyIdx(sf)] := true;
       g.pl[c].viaCoup[SafetyIdx(sf)] := true;
       g.pl[c].battle := g.prevBattle;
       g.pl[c].limited := g.prevLimited;
+      ApplySafety(g.pl[c], sf);                  { Right of Way also clears an older Stop/Limit }
       DealTo(g, c);
       if g.pl[c].handN = 0 then EndTurn(g)
       else begin
@@ -588,7 +594,7 @@ end;
 
 { Returns 0 when the game state is self-consistent, else a code identifying the problem. }
 function CheckInvariants(var g: Game): integer;
-var p, tot, r: integer;
+var p, i, tot, r: integer;
 begin
   r := 0;
   tot := RemainingDeck(g);
@@ -599,6 +605,20 @@ begin
     if (g.pl[p].n200 < 0) or (g.pl[p].n200 > Max200) then r := 3
   end;
   if tot + g.gone <> NumCards then r := 4;
+  for p := 0 to 1 do begin
+    if g.pl[p].safe[3] and (g.pl[p].limited or (g.pl[p].battle = hzStop)) then r := 5;
+    for i := 0 to 3 do
+      if g.pl[p].viaCoup[i] and (not g.pl[p].safe[i]) then r := 6
+  end;
+  if (g.turn < 0) or (g.turn > 1) then r := 7;
+  if (g.ph = phCoup) and ((g.coupSeat < 0) or (g.coupSeat > 1)) then r := 8;
+  if (g.ph <> phCoup) and (g.coupSeat <> -1) then r := 8;
+  if g.tripBy > 1 then r := 9;
+  if g.tripBy >= 0 then begin
+    if g.tripBy <= 1 then begin
+      if g.pl[g.tripBy].miles <> TripMiles then r := 9
+    end
+  end;
   CheckInvariants := r
 end;
 
