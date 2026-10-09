@@ -30,6 +30,14 @@ class LintTests(unittest.TestCase):
         self.assertEqual(self.kinds("type ErrStr = string[63];\n"), [])
         self.assertEqual(self.kinds("type ErrStr = string [63];\n"), [])
 
+    def test_function_returning_string_flagged(self):
+        # Lisa Pascal error 118: a function result must be scalar, subrange or pointer.
+        self.assertTrue(self.kinds("function ErrText(e: integer): ErrStr;\n"))
+        self.assertTrue(self.kinds("function Name: string;\n"))
+        self.assertTrue(self.kinds("function Name(n: integer): string[20];\n"))
+        self.assertEqual(self.kinds("function Count(s: ErrStr): integer;\n"), [])
+        self.assertEqual(self.kinds("procedure ErrText(e: integer; var s: ErrStr);\n"), [])
+
     def test_non_ascii_flagged(self):
         self.assertTrue(self.kinds("x := 1; { café }\n"))
 

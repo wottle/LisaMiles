@@ -15,6 +15,8 @@ FORBIDDEN = [
     (r"\botherwise\b", "otherwise differs between compilers; use if-chains"),
     (r"\buses\b", "MILES-LOGIC must not depend on any unit"),
     (r"\bstring\b(?!\s*\[)", "unsized string: declare a sized one such as string[63]"),
+    (r"\bfunction\b[^;]*:\s*(?:string|ErrStr)\s*(?:\[[^\]]*\])?\s*;",
+     "a function cannot return a string (Lisa Pascal error 118); use a procedure with a var parameter"),
 ]
 
 

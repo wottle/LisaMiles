@@ -83,7 +83,7 @@ function  RemainingDeck(var g: Game): integer;
 procedure NewGame(var g: Game; seed: longint);
 function  CanMoveNow(var p: PlayerState): boolean;
 function  CheckPlay(var g: Game; handIdx: integer; t: Target): integer;
-function  ErrText(e: integer): ErrStr;
+procedure ErrText(e: integer; var s: ErrStr);
 function  HandIndexOf(var p: PlayerState; k: CardKind): integer;
 procedure DrawCard(var g: Game);
 procedure DoPlay(var g: Game; handIdx: integer; t: Target; var err: integer);
@@ -327,22 +327,23 @@ begin
   end
 end;
 
-function ErrText(e: integer): ErrStr;
+{ Lisa Pascal functions may only return scalar, subrange or pointer types, so the text comes back in s. }
+procedure ErrText(e: integer; var s: ErrStr);
 begin
-  ErrText := 'That play is not allowed.';
-  if e = ErrOK then ErrText := '';
-  if e = ErrPhase then ErrText := 'Draw a card first.';
-  if e = ErrNoCard then ErrText := 'Pick a card from your hand.';
-  if e = ErrNeedGo then ErrText := 'You need a Go card first.';
-  if e = ErrBlocked then ErrText := 'You must fix your problem before moving.';
-  if e = ErrLimit then ErrText := 'Speed limit: 50 miles or less.';
-  if e = Err200 then ErrText := 'Only two 200-mile cards per hand.';
-  if e = ErrOver then ErrText := 'That would go past 1000 miles.';
-  if e = ErrWrongRemedy then ErrText := 'That is not the right remedy.';
-  if e = ErrBadTarget then ErrText := 'That card cannot go there.';
-  if e = ErrImmune then ErrText := 'They are protected by a safety.';
-  if e = ErrNoEffect then ErrText := 'That would have no effect right now.';
-  if e = ErrNoNeed then ErrText := 'You do not need that.'
+  s := 'That play is not allowed.';
+  if e = ErrOK then s := '';
+  if e = ErrPhase then s := 'Draw a card first.';
+  if e = ErrNoCard then s := 'Pick a card from your hand.';
+  if e = ErrNeedGo then s := 'You need a Go card first.';
+  if e = ErrBlocked then s := 'You must fix your problem before moving.';
+  if e = ErrLimit then s := 'Speed limit: 50 miles or less.';
+  if e = Err200 then s := 'Only two 200-mile cards per hand.';
+  if e = ErrOver then s := 'That would go past 1000 miles.';
+  if e = ErrWrongRemedy then s := 'That is not the right remedy.';
+  if e = ErrBadTarget then s := 'That card cannot go there.';
+  if e = ErrImmune then s := 'They are protected by a safety.';
+  if e = ErrNoEffect then s := 'That would have no effect right now.';
+  if e = ErrNoNeed then s := 'You do not need that.'
 end;
 
 function HandIndexOf(var p: PlayerState; k: CardKind): integer;

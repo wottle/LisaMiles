@@ -197,6 +197,7 @@ begin
 end;
 
 procedure TestPhase;
+var msg: ErrStr;
 begin
   FreshPlay(g);
   SetHand(g, 0, ck25, ck25, ck25, ck25, ck25, ck25);
@@ -206,7 +207,10 @@ begin
   CheckEq(CheckPlay(g, 0, tgDiscard), ErrNoCard, 'index 0 invalid');
   CheckEq(CheckPlay(g, 7, tgDiscard), ErrNoCard, 'index past hand invalid');
   CheckEq(CheckPlay(g, 3, tgDiscard), ErrOK, 'discard always legal');
-  Check(length(ErrText(ErrNeedGo)) > 0, 'ErrText has text')
+  ErrText(ErrNeedGo, msg);
+  Check(length(msg) > 0, 'ErrText fills in text for a real error');
+  ErrText(ErrOK, msg);
+  CheckEq(length(msg), 0, 'ErrText is empty for ErrOK')
 end;
 
 procedure TestDrawPlay;
