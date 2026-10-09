@@ -143,7 +143,8 @@ var ev : UIEvent;
 begin
    if myWindow = nil then exit(DoWindowClick);
    SetPort(myWindow);
-   UIClick(ui, theGame, theEvent.where.h, theEvent.where.v, ev);
+   { theEvent.when and clickDelay share one clock (hundredths of a second), which is how a double click is spotted. }
+   UIClick(ui, theGame, theEvent.where.h, theEvent.where.v, theEvent.when, clickDelay, ev);
    AfterEvent(ev)
 end;
 
