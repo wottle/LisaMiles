@@ -1,6 +1,9 @@
-{ MILES-DRAW.TEXT (STUB) -- just enough drawing to prove the framework launches: the     }
-{ window frame, the two player labels from the phrase file, and the status line.       }
-{ Task 7 replaces this file with the real table renderer; the interface is identical.  }
+{ MILES-DRAW.TEXT -- all QuickDraw rendering for 1000 Miles.  Geometry comes from       }
+{ MilesLayout, state from the global game and UI records, text from the phrase file.    }
+{ Version 1 draws cards as typographic tiles (numerals and short captions); hand-drawn  }
+{ icons come later.  Card styles read in 1 bit without colour: distance = plain frame   }
+{ with a big numeral; hazard = BLACK card; remedy = double frame; safety = heavy frame  }
+{ with a black band.                                                                    }
 unit MilesDraw;
 
 INTERFACE
@@ -23,34 +26,307 @@ uses (*$U UnitStd.obj *)        UnitStd,
      (*$U MILES/CTRL.OBJ *)     MilesCtrl,
      (*$U MILES/GLOBALS.OBJ *)  MilesGlobals;
 
+{ Repaint the whole table into the window (or the update region while updating). }
 procedure DrawContents (window : WindowPtr);
 
 IMPLEMENTATION
 
+const
+   statusLineY = 274;
+   statusTextY = 291;
+
+procedure BoxToRect (var b : Box; var r : Rect);
+begin
+   { SetRect takes left, top, right, bottom -- NOT the record's field order. }
+   SetRect(r, b.left, b.top, b.right, b.bottom)
+end;
+
+procedure CenterString (var r : Rect; baseline : integer; var s : Str255);
+begin
+   MoveTo(r.left + ((r.right - r.left) - StringWidth(s)) div 2, baseline);
+   DrawString(s)
+end;
+
+{ A card back: a gray tile with a frame. }
+procedure ShowBack (var r : Rect);
+begin
+   PenNormal;
+   FillRect(r, gray);
+   FrameRect(r)
+end;
+
+{ An empty pile: a gray outline. }
+procedure DrawEmptySlot (var r : Rect);
+begin
+   EraseRect(r);
+   PenNormal;
+   PenPat(gray);
+   FrameRect(r);
+   PenPat(black)
+end;
+
+{ The thick outline that shows where the selected card can legally go. }
+procedure DrawHighlight (var r : Rect);
+var o : Rect;
+begin
+   o := r;
+   InsetRect(o, -4, -4);
+   PenNormal;
+   PenSize(2, 2);
+   FrameRect(o);
+   PenNormal
+end;
+
+procedure ShowFace (k : CardKind; var r : Rect);
+var s     : Str255;
+    fi    : FontInfo;
+    inner : Rect;
+    band  : Rect;
+    mid   : integer;
+begin
+   PenNormal;
+   EraseRect(r);
+   TextMode(srcOr);
+   TextFace([]);
+   if IsDistance(k) then begin
+      FrameRect(r);
+      TextFont(fntBig);
+      GetFontInfo(fi);
+      NumToStr(DistValue(k), s);
+      CenterString(r, r.top + 6 + fi.ascent, s);
+      TextFont(fntCaption);
+      GetFontInfo(fi);
+      s := capText[k];
+      CenterString(r, r.bottom - 6 - fi.descent, s)
+   end
+   else begin
+      TextFont(fntCaption);
+      GetFontInfo(fi);
+      s := capText[k];
+      if IsSafety(k) then begin
+         PenSize(2, 2);
+         FrameRect(r);
+         PenNormal;
+         SetRect(band, r.left + 2, r.bottom - 14, r.right - 2, r.bottom - 2);
+         PaintRect(band);
+         mid := r.top + (CardH - 14 + fi.ascent - fi.descent) div 2;
+         CenterString(r, mid, s)
+      end
+      else begin
+         FrameRect(r);
+         if IsRemedy(k) then begin
+            inner := r;
+            InsetRect(inner, 3, 3);
+            FrameRect(inner)
+         end;
+         mid := r.top + (CardH + fi.ascent - fi.descent) div 2;
+         CenterString(r, mid, s);
+         if IsHazard(k) then
+            InvertRect(r)              { hazards are black cards with white text }
+      end
+   end
+end;
+
+{ The miles-travelled box: a framed number. }
+procedure DrawMilesBox (miles : integer; var r : Rect);
+var s  : Str255;
+    fi : FontInfo;
+begin
+   PenNormal;
+   EraseRect(r);
+   FrameRect(r);
+   TextMode(srcOr);
+   TextFace([]);
+   TextFont(fntBig);
+   GetFontInfo(fi);
+   NumToStr(miles, s);
+   CenterString(r, r.top + 6 + fi.ascent, s);
+   TextFont(fntCaption);
+   GetFontInfo(fi);
+   s := lblMiles;
+   CenterString(r, r.bottom - 6 - fi.descent, s)
+end;
+
+{ One player's row: header (name, trip bar, miles), the seven piles, and for the }
+{ computer the backs of its cards.                                              }
+procedure DrawSide (seat : integer);
+var b, hb  : Box;
+    r, bar : Rect;
+    s, t   : Str255;
+    i, w   : integer;
+    k      : CardKind;
+begin
+   SlotBox(seat, SlotBattle, hb);
+
+   { header: the name, a 1000-mile trip bar, and the mileage as text }
+   TextMode(srcOr);
+   TextFace([bold]);
+   TextFont(fntCaption);
+   MoveTo(8, hb.top - 6);
+   if seat = 0 then s := lblYou else s := lblComputer;
+   DrawString(s);
+   TextFace([]);
+   SetRect(bar, 130, hb.top - 16, 430, hb.top - 7);
+   PenNormal;
+   FrameRect(bar);
+   w := ord4(theGame.pl[seat].miles) * 298 div 1000;
+   if w > 0 then begin
+      SetRect(r, 131, bar.top + 1, 131 + w, bar.bottom - 1);
+      PaintRect(r)
+   end;
+   NumToStr(theGame.pl[seat].miles, s);
+   t := lblMiles;
+   s := concat(s, ' / 1000 ', t);
+   MoveTo(440, hb.top - 6);
+   DrawString(s);
+
+   { battle pile: the top card, or an empty outline }
+   SlotBox(seat, SlotBattle, b);
+   BoxToRect(b, r);
+   if theGame.pl[seat].battle <> ckNone then ShowFace(theGame.pl[seat].battle, r)
+   else DrawEmptySlot(r);
+
+   { speed pile: a Speed Limit card while limited }
+   SlotBox(seat, SlotSpeed, b);
+   BoxToRect(b, r);
+   if theGame.pl[seat].limited then ShowFace(hzLimit, r)
+   else DrawEmptySlot(r);
+
+   { the four safeties, in the order Ace, Tank, Puncture-proof, Right of Way }
+   k := sfAce;
+   for i := 0 to 3 do begin
+      SlotBox(seat, SlotSafety0 + i, b);
+      BoxToRect(b, r);
+      if theGame.pl[seat].safe[i] then ShowFace(k, r)
+      else DrawEmptySlot(r);
+      if i < 3 then k := succ(k)
+   end;
+
+   { miles }
+   SlotBox(seat, SlotMiles, b);
+   BoxToRect(b, r);
+   DrawMilesBox(theGame.pl[seat].miles, r);
+
+   { the computer's hidden hand }
+   if seat = 1 then
+      for i := 1 to theGame.pl[1].handN do begin
+         OppHandBox(i, b);
+         BoxToRect(b, r);
+         ShowBack(r)
+      end
+end;
+
+procedure DrawMiddle;
+var b    : Box;
+    r, c : Rect;
+    s, t : Str255;
+    fi   : FontInfo;
+    j    : integer;
+begin
+   { the draw pile: a small stack of backs with the count on top }
+   DrawPileBox(b);
+   for j := 2 downto 0 do begin
+      SetRect(r, b.left + (2 - j) * 2, b.top + j * 2, b.left + (2 - j) * 2 + CardW, b.top + j * 2 + CardH);
+      ShowBack(r)
+   end;
+   SetRect(c, r.left + 12, r.top + 15, r.right - 12, r.bottom - 15);
+   EraseRect(c);
+   FrameRect(c);
+   TextFont(fntCaption);
+   TextMode(srcOr);
+   TextFace([]);
+   GetFontInfo(fi);
+   NumToStr(RemainingDeck(theGame), s);
+   CenterString(c, c.top + (c.bottom - c.top + fi.ascent - fi.descent) div 2, s);
+
+   { the discard pile }
+   DiscardBox(b);
+   BoxToRect(b, r);
+   if theGame.discardTop <> ckNone then ShowFace(theGame.discardTop, r)
+   else DrawEmptySlot(r);
+
+   { the score line }
+   TextFont(fntCaption);
+   TextFace([bold]);
+   s := lblMatch;
+   MoveTo(136, b.top + 14);
+   DrawString(s);
+   TextFace([]);
+   t := lblYou;
+   NumToStr(ui.match[0], s);
+   s := concat(t, ' ', s);
+   MoveTo(136, b.top + 30);
+   DrawString(s);
+   t := lblComputer;
+   NumToStr(ui.match[1], s);
+   s := concat(t, ' ', s);
+   MoveTo(136, b.top + 46);
+   DrawString(s)
+end;
+
+procedure DrawHand;
+var i    : integer;
+    b    : Box;
+    r    : Rect;
+begin
+   for i := 1 to theGame.pl[0].handN do begin
+      HandBox(i, i = ui.sel, b);
+      BoxToRect(b, r);
+      ShowFace(theGame.pl[0].hand[i], r)
+   end
+end;
+
+{ Outline the pile the selected card would naturally go to, on whichever side(s) allow it. }
+procedure DrawTargets;
+var k    : CardKind;
+    b    : Box;
+    r    : Rect;
+    slot : integer;
+begin
+   if (ui.sel >= 1) and (theGame.ph = phPlay) and (theGame.turn = 0) then begin
+      k := theGame.pl[0].hand[ui.sel];
+      slot := NaturalSlot(k);
+      if CheckPlay(theGame, ui.sel, tgSelf) = ErrOK then begin
+         SlotBox(0, slot, b);
+         BoxToRect(b, r);
+         DrawHighlight(r)
+      end;
+      if CheckPlay(theGame, ui.sel, tgOpponent) = ErrOK then begin
+         SlotBox(1, slot, b);
+         BoxToRect(b, r);
+         DrawHighlight(r)
+      end
+   end
+end;
+
+procedure DrawStatus;
+var s : Str255;
+begin
+   PenNormal;
+   MoveTo(0, statusLineY);
+   LineTo(ContentW - 1, statusLineY);
+   GetPhrase(phStatusBase + StatusMsg(ui, theGame), s);
+   TextFont(fntCaption);
+   TextMode(srcOr);
+   TextFace([]);
+   MoveTo(8, statusTextY);
+   DrawString(s)
+end;
+
 procedure DrawContents {window : WindowPtr};
 var all : Rect;
-    s   : Str255;
 begin
    if window = nil then exit(DrawContents);
    SetPort(window);
    SetRect(all, 0, 0, ContentW, ContentH);
    ClipRect(all);
    EraseRect(all);
-   PenNormal;
-   FrameRect(all);
-   TextMode(srcOr);
-   TextFace([]);
-   TextFont(fntBig);
-   s := lblComputer;
-   MoveTo(20, 40);
-   DrawString(s);
-   s := lblYou;
-   MoveTo(20, 160);
-   DrawString(s);
-   TextFont(fntCaption);
-   GetPhrase(phStatusBase + StatusMsg(ui, theGame), s);
-   MoveTo(8, 291);
-   DrawString(s)
+   DrawSide(1);
+   DrawMiddle;
+   DrawSide(0);
+   DrawHand;
+   DrawTargets;
+   DrawStatus
 end;
 
 end.
