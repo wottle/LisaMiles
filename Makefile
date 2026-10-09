@@ -3,7 +3,8 @@ FPCOPTS   = -Mtp -Cr -Co -vewn -FEbuild -FUbuild -Fubuild -Fuhost_test
 # Lisa wants (*$U MILES/X.OBJ *) before each non-intrinsic unit in a uses list; Free Pascal does
 # not, so host builds copy each portable unit with those directives removed.
 STRIP     = sed -e 's/(\*\$$U [^*]*\*)//g'
-SRC       = src/MILES-LOGIC.TEXT
+PORTABLE  = src/MILES-LOGIC.TEXT src/MILES-LAYOUT.TEXT src/MILES-CTRL.TEXT
+LISAONLY  = src/MILES-GLOBALS.TEXT src/MILES-DRAW.TEXT src/MILES-MAIN.TEXT
 
 # The test and simulator programs are always rebuilt (half a second): make's one-second file-time
 # granularity can otherwise skip a rebuild right after a quick edit.
@@ -40,7 +41,8 @@ sim: build/sim
 
 lint:
 	python3 tools/test_lint.py
-	python3 tools/lint_lisa_subset.py $(SRC)
+	python3 tools/lint_lisa_subset.py $(PORTABLE)
+	python3 tools/lint_lisa_subset.py --lisa-only $(LISAONLY)
 
 clean:
 	rm -rf build

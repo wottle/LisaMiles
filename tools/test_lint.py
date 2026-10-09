@@ -7,8 +7,8 @@ from lint_lisa_subset import find_problems
 
 
 class LintTests(unittest.TestCase):
-    def kinds(self, text):
-        return [m for _, m in find_problems(text)]
+    def kinds(self, text, lisa_only=False):
+        return [m for _, m in find_problems(text, lisa_only)]
 
     def test_clean_code_passes(self):
         self.assertEqual(self.kinds("unit X;\ninterface\nimplementation\nend.\n"), [])
@@ -37,6 +37,29 @@ class LintTests(unittest.TestCase):
         self.assertTrue(self.kinds("function Name(n: integer): string[20];\n"))
         self.assertEqual(self.kinds("function Count(s: ErrStr): integer;\n"), [])
         self.assertEqual(self.kinds("procedure ErrText(e: integer; var s: ErrStr);\n"), [])
+
+    def test_unit_directive_allowed_other_directives_not(self):
+        self.assertEqual(self.kinds("uses (*$U MILES/LOGIC.OBJ *) MilesLogic;\n"), [])
+        self.assertTrue(self.kinds("(*$R+ *)\n"))
+        self.assertTrue(self.kinds("{$mode tp}\n"))
+
+    def test_portable_uses_only_miles_units(self):
+        self.assertEqual(self.kinds("uses MilesLogic, MilesLayout;\n"), [])
+        self.assertEqual(self.kinds("uses (*$U MILES/A.OBJ *) MilesLogic,\n     (*$U MILES/B.OBJ *) MilesLayout;\n"), [])
+        self.assertTrue(self.kinds("uses MilesLogic, QuickDraw;\n"))
+        self.assertTrue(self.kinds("uses crt;\n"))
+
+    def test_brace_inside_a_brace_comment_flagged(self):
+        self.assertTrue(self.kinds("{ installed as {T202}Obj }\n"))
+        self.assertTrue(self.kinds("{ a { b }\n", lisa_only=True))
+        self.assertEqual(self.kinds("{ a comment }\nx := 1; { another }\n"), [])
+        self.assertEqual(self.kinds("p := pos('}', s);\n"), [])
+
+    def test_lisa_only_profile_allows_toolbox_idioms_but_not_known_errors(self):
+        ok = "uses QuickDraw;\nexit(Foo);\ncase x of\n  1: y;\n  otherwise\nend;\n"
+        self.assertEqual(self.kinds(ok, lisa_only=True), [])
+        self.assertTrue(self.kinds("function F: Str255;\n", lisa_only=True))
+        self.assertTrue(self.kinds("x := 1; { café }\n", lisa_only=True))
 
     def test_non_ascii_flagged(self):
         self.assertTrue(self.kinds("x := 1; { café }\n"))
