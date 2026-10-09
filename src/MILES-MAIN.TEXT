@@ -125,13 +125,14 @@ begin
    nextAi := Time + aiDelay
 end;
 
-procedure StartHand (confirm : boolean);
+{ New Game: forget every score and deal a fresh match.  Ask first if that throws anything away. }
+procedure StartGame (confirm : boolean);
 begin
    if confirm then
-      if theGame.ph <> phOver then
+      if (theGame.ph <> phOver) or (ui.match[0] + ui.match[1] > 0) then
          if not CautionAlert(allAlerts, alrtNewGame) then
-            exit(StartHand);
-   UINewHand(ui, theGame, Time);
+            exit(StartGame);
+   UINewGame(ui, theGame, Time);
    haveGame := true;
    nextAi := Time + aiDelay;
    Repaint
@@ -178,7 +179,7 @@ begin
       mGame :
          case item of
             miNewGame :
-               StartHand(true);
+               StartGame(true);
             miRules :
                NoteAlert(allAlerts, alrtRules);
          end;
@@ -197,7 +198,7 @@ begin
    myWindow := window;
    TakeWindow(myWindow);
    if not haveGame then begin
-      UINewHand(ui, theGame, Time);
+      UINewGame(ui, theGame, Time);
       haveGame := true
    end;
    nextAi := Time + aiDelay;

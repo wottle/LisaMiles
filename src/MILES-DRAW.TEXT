@@ -1,3 +1,48 @@
+{ The Next Match button, shown in the middle band once a match is over. }
+procedure DrawNextButton;
+var b  : Box;
+    r  : Rect;
+    s  : Str255;
+    fi : FontInfo;
+begin
+   if theGame.ph <> phOver then exit(DrawNextButton);
+   NextBox(b);
+   BoxToRect(b, r);
+   PenNormal;
+   EraseRect(r);
+   PenSize(2, 2);
+   FrameRect(r);
+   PenNormal;
+   TextMode(srcOr);
+   TextFont(fntCaption);
+   TextFace([bold]);
+   GetFontInfo(fi);
+   s := lblNext;
+   CenterString(r, r.top + ((r.bottom - r.top) + fi.ascent - fi.descent) div 2, s);
+   TextFace([])
+end;
+
+procedure DrawStatus;
+var s, t : Str255;
+    code : integer;
+begin
+   PenNormal;
+   MoveTo(0, statusLineY);
+   LineTo(ContentW - 1, statusLineY);
+   code := StatusMsg(ui, theGame);
+   GetPhrase(phStatusBase + code, s);
+   { messages about the computer's last move name the card it used }
+   if (code >= MsgCpuPlayed) and (code <= MsgCpuDiscard) then begin
+      t := capText[ui.lastCard];
+      s := concat(s, ' ', t)
+   end;
+   TextFont(fntCaption);
+   TextMode(srcOr);
+   TextFace([]);
+   MoveTo(8, statusTextY);
+   DrawString(s)
+end;
+
 { MILES-DRAW.TEXT -- all QuickDraw rendering for 1000 Miles.  Geometry comes from       }
 { MilesLayout, state from the global game and UI records, text from the phrase file.    }
 { Version 1 draws cards as typographic tiles (numerals and short captions); hand-drawn  }
@@ -299,21 +344,6 @@ begin
    end
 end;
 
-{ TEMPORARY DIAGNOSTIC (remove once the missing-caption bug is understood): shows the length }
-{ of the startup-loaded label and of phrases fetched live, to see which phrase numbers load.   }
-procedure DrawDebug;
-var s, t, u : Str255;
-begin
-   NumToStr(length(lblYou), s);
-   u := concat('lbl=', s);
-   NumToStr(length(capText[ck25]), s);  u := concat(u, ' cap25=', s);
-   GetPhrase(961, t);  NumToStr(length(t), s);  u := concat(u, ' p961=', s);
-   GetPhrase(930, t);  NumToStr(length(t), s);  u := concat(u, ' p930=', s);
-   TextFont(fntCaption);
-   MoveTo(400, statusTextY);
-   DrawString(u)
-end;
-
 procedure DrawStatus;
 var s : Str255;
 begin
@@ -332,7 +362,6 @@ procedure DrawContents {window : WindowPtr};
 var all : Rect;
 begin
    if window = nil then exit(DrawContents);
-   if length(lblYou) = 0 then LoadCaptions;     { TEMPORARY: retry the startup load }
    SetPort(window);
    SetRect(all, 0, 0, ContentW, ContentH);
    ClipRect(all);
@@ -342,8 +371,8 @@ begin
    DrawSide(0);
    DrawHand;
    DrawTargets;
-   DrawStatus;
-   DrawDebug
+   DrawNextButton;
+   DrawStatus
 end;
 
 end.
