@@ -4,9 +4,238 @@ unit MilesLogic;
 
 interface
 
+const
+  NumCards  = 106;
+  HandSize  = 6;
+  TripMiles = 1000;
+  Max200    = 2;
+  { RULE R1: playing a safety on your own turn gives an extra turn. }
+  SafetyExtraTurn = true;
+
+  ErrOK = 0;         ErrPhase = 1;       ErrNoCard = 2;      ErrNeedGo = 3;
+  ErrBlocked = 4;    ErrLimit = 5;       Err200 = 6;         ErrOver = 7;
+  ErrWrongRemedy = 8; ErrBadTarget = 9;  ErrImmune = 10;     ErrNoEffect = 11;
+  ErrNoNeed = 12;
+
+  PtSafety = 100;  PtCoup = 300;  PtAllSafe = 300;  PtTrip = 400;
+  PtDelayed = 300; PtSafeTrip = 300; PtShutout = 500;
+
+type
+  CardKind = (ckNone,
+              ck25, ck50, ck75, ck100, ck200,
+              hzAccident, hzOutOfGas, hzFlat, hzLimit, hzStop,
+              rmRepairs, rmGas, rmSpare, rmEndLimit, rmGo,
+              sfAce, sfTank, sfPunct, sfRoW);
+  Target = (tgSelf, tgOpponent, tgDiscard);
+  Phase  = (phDraw, phPlay, phCoup, phOver);
+
+  PlayerState = record
+    battle  : CardKind;                { ckNone, a remedy, or a blocking hazard }
+    limited : boolean;                 { speed limit in force }
+    safe    : array[0..3] of boolean;  { Ace, Tank, Puncture-proof, Right of Way }
+    viaCoup : array[0..3] of boolean;
+    miles   : integer;
+    n200    : integer;
+    handN   : integer;
+    hand    : array[1..7] of CardKind; { 7 only between draw and play }
+  end;
+
+  Game = record
+    pl          : array[0..1] of PlayerState;
+    deck        : array[1..NumCards] of CardKind;
+    deckNext    : integer;             { > NumCards when the pile is empty }
+    discardTop  : CardKind;
+    turn        : integer;             { 0 or 1 }
+    ph          : Phase;
+    rng         : longint;
+    tripBy      : integer;             { -1 none, else the seat that reached 1000 }
+    delayedTrip : boolean;
+    gone        : integer;             { cards removed from hands (played/discarded) }
+    coupSeat    : integer;
+    coupHazard  : CardKind;
+    prevBattle  : CardKind;
+    prevLimited : boolean;
+  end;
+
+  PlayMove = record
+    hand : integer;
+    tgt  : Target;
+  end;
+
+  MoveList = record
+    n : integer;
+    m : array[1..24] of PlayMove;
+  end;
+
+function  Opp(s: integer): integer;
+function  KindCount(k: CardKind): integer;
+function  DistValue(k: CardKind): integer;
+function  IsDistance(k: CardKind): boolean;
+function  IsHazard(k: CardKind): boolean;
+function  IsRemedy(k: CardKind): boolean;
+function  IsSafety(k: CardKind): boolean;
+function  SafetyIdx(k: CardKind): integer;
+function  SafetyFor(h: CardKind): CardKind;
+function  NormSeed(s: longint): longint;
+function  RemainingDeck(var g: Game): integer;
+procedure NewGame(var g: Game; seed: longint);
 {@IFACE}
 
 implementation
+
+function Opp(s: integer): integer;
+begin
+  Opp := 1 - s
+end;
+
+function IsSafety(k: CardKind): boolean;
+begin
+  IsSafety := (k >= sfAce) and (k <= sfRoW)
+end;
+
+function KindCount(k: CardKind): integer;
+begin
+  KindCount := 0;
+  if k = ck25 then KindCount := 10;
+  if k = ck50 then KindCount := 10;
+  if k = ck75 then KindCount := 10;
+  if k = ck100 then KindCount := 12;
+  if k = ck200 then KindCount := 4;
+  if k = hzAccident then KindCount := 3;
+  if k = hzOutOfGas then KindCount := 3;
+  if k = hzFlat then KindCount := 3;
+  if k = hzLimit then KindCount := 4;
+  if k = hzStop then KindCount := 5;
+  if k = rmRepairs then KindCount := 6;
+  if k = rmGas then KindCount := 6;
+  if k = rmSpare then KindCount := 6;
+  if k = rmEndLimit then KindCount := 6;
+  if k = rmGo then KindCount := 14;
+  if IsSafety(k) then KindCount := 1
+end;
+
+function DistValue(k: CardKind): integer;
+begin
+  DistValue := 0;
+  if k = ck25 then DistValue := 25;
+  if k = ck50 then DistValue := 50;
+  if k = ck75 then DistValue := 75;
+  if k = ck100 then DistValue := 100;
+  if k = ck200 then DistValue := 200
+end;
+
+function IsDistance(k: CardKind): boolean;
+begin
+  IsDistance := (k >= ck25) and (k <= ck200)
+end;
+
+function IsHazard(k: CardKind): boolean;
+begin
+  IsHazard := (k >= hzAccident) and (k <= hzStop)
+end;
+
+function IsRemedy(k: CardKind): boolean;
+begin
+  IsRemedy := (k >= rmRepairs) and (k <= rmGo)
+end;
+
+function SafetyIdx(k: CardKind): integer;
+begin
+  SafetyIdx := ord(k) - ord(sfAce)
+end;
+
+function SafetyFor(h: CardKind): CardKind;
+begin
+  SafetyFor := ckNone;
+  if h = hzAccident then SafetyFor := sfAce;
+  if h = hzOutOfGas then SafetyFor := sfTank;
+  if h = hzFlat then SafetyFor := sfPunct;
+  if h = hzLimit then SafetyFor := sfRoW;
+  if h = hzStop then SafetyFor := sfRoW
+end;
+
+{ Park-Miller minimal standard generator using Schrage's method: no 32-bit overflow. }
+function NextRand(var seed: longint): longint;
+var hi, lo: longint;
+begin
+  hi := seed div 127773;
+  lo := seed mod 127773;
+  seed := 16807 * lo - 2836 * hi;
+  if seed <= 0 then seed := seed + 2147483647;
+  NextRand := seed
+end;
+
+{ Any longint becomes a seed in 1..2147483646 (0 would make the generator stick at 0). }
+function NormSeed(s: longint): longint;
+begin
+  if s < 0 then s := -(s + 1);
+  s := s mod 2147483647;
+  if s = 0 then s := 1;
+  NormSeed := s
+end;
+
+function RandBelow(var g: Game; n: integer): integer;
+begin
+  RandBelow := NextRand(g.rng) mod n
+end;
+
+function RemainingDeck(var g: Game): integer;
+begin
+  RemainingDeck := NumCards + 1 - g.deckNext
+end;
+
+procedure DealTo(var g: Game; p: integer);
+begin
+  if g.deckNext <= NumCards then begin
+    g.pl[p].handN := g.pl[p].handN + 1;
+    g.pl[p].hand[g.pl[p].handN] := g.deck[g.deckNext];
+    g.deckNext := g.deckNext + 1
+  end
+end;
+
+procedure NewGame(var g: Game; seed: longint);
+var i, j, c, n, p: integer; k, t: CardKind;
+begin
+  g.rng := NormSeed(seed);
+  n := 0;
+  for k := ck25 to sfRoW do
+    for c := 1 to KindCount(k) do begin
+      n := n + 1;
+      g.deck[n] := k
+    end;
+  for i := NumCards downto 2 do begin
+    j := 1 + RandBelow(g, i);
+    t := g.deck[i];
+    g.deck[i] := g.deck[j];
+    g.deck[j] := t
+  end;
+  g.deckNext := 1;
+  for p := 0 to 1 do begin
+    g.pl[p].battle := ckNone;
+    g.pl[p].limited := false;
+    g.pl[p].miles := 0;
+    g.pl[p].n200 := 0;
+    g.pl[p].handN := 0;
+    for i := 0 to 3 do begin
+      g.pl[p].safe[i] := false;
+      g.pl[p].viaCoup[i] := false
+    end
+  end;
+  for i := 1 to HandSize do begin
+    DealTo(g, 0);
+    DealTo(g, 1)
+  end;
+  g.discardTop := ckNone;
+  g.turn := 0;
+  g.ph := phDraw;
+  g.tripBy := -1;
+  g.delayedTrip := false;
+  g.gone := 0;
+  g.coupSeat := -1;
+  g.coupHazard := ckNone;
+  g.prevBattle := ckNone;
+  g.prevLimited := false
+end;
 
 {@IMPL}
 
