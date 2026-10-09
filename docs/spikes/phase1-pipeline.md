@@ -81,3 +81,12 @@ Files to send with the transfer script (it turns `-` into `/`): `src/MILES-LOGIC
   Renamed to `MsgCpuCoup`; `tools/lint_lisa_subset.py --collisions` now checks every unit together
   (it also caught `DrawCard` vs `DrawCardFace`/`DrawCardBack` in the not-yet-written drawing unit).
 - After the rename `MILES/CTRL` compiled with no errors.
+
+## Phase 3: framework launch (Checkpoint 1, 2026-10-09)
+- `MILES/GLOBALS`, `MILES/DRAW` (stub) and `MILES/MAIN` each compiled with no errors on the first try (the whole
+  Lisa toolbox `uses` list, Alert Manager, Filer protocol and window code were accepted as written).
+- Link with `IOSPASLIB`, `SYS1LIB`, `SYS2LIB` (no `PRLIB` needed): `Output is executable`.
+- `<MILES/MAKE` ran end to end and printed "1000 Miles has been successfully installed in the Office System"
+  (appears in the disk window of the paraport device). The first-run placeholder copies of `{T202}Obj` and
+  `{T202}PHRASE` made the exec's delete steps work.
+- Launching the tool: the window opens and the File / Game menus are present.
