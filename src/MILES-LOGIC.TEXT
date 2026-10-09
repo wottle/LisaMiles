@@ -79,6 +79,9 @@ function  SafetyFor(h: CardKind): CardKind;
 function  NormSeed(s: longint): longint;
 function  RemainingDeck(var g: Game): integer;
 procedure NewGame(var g: Game; seed: longint);
+function  CanMoveNow(var p: PlayerState): boolean;
+function  CheckPlay(var g: Game; handIdx: integer; t: Target): integer;
+function  ErrText(e: integer): string;
 {@IFACE}
 
 implementation
@@ -235,6 +238,100 @@ begin
   g.coupHazard := ckNone;
   g.prevBattle := ckNone;
   g.prevLimited := false
+end;
+
+{ Can this player lay a distance card right now?  Right of Way acts as a permanent Go. }
+function CanMoveNow(var p: PlayerState): boolean;
+begin
+  if p.safe[3] then
+    CanMoveNow := not ((p.battle = hzAccident) or (p.battle = hzOutOfGas) or (p.battle = hzFlat))
+  else
+    CanMoveNow := (p.battle = rmGo)
+end;
+
+function CheckSelf(var p: PlayerState; k: CardKind): integer;
+var r: integer;
+begin
+  r := ErrOK;
+  if IsDistance(k) then begin
+    if not CanMoveNow(p) then begin
+      if IsHazard(p.battle) then r := ErrBlocked else r := ErrNeedGo
+    end
+    else if p.limited and (not p.safe[3]) and (DistValue(k) > 50) then r := ErrLimit
+    else if (k = ck200) and (p.n200 >= Max200) then r := Err200
+    else if p.miles + DistValue(k) > TripMiles then r := ErrOver
+  end
+  else if k = rmGo then begin
+    if p.safe[3] then r := ErrNoNeed
+    else if p.battle = rmGo then r := ErrNoNeed
+    else if (p.battle = hzAccident) or (p.battle = hzOutOfGas) or (p.battle = hzFlat) then
+      r := ErrWrongRemedy
+  end
+  else if k = rmRepairs then begin
+    if p.battle <> hzAccident then r := ErrWrongRemedy
+  end
+  else if k = rmGas then begin
+    if p.battle <> hzOutOfGas then r := ErrWrongRemedy
+  end
+  else if k = rmSpare then begin
+    if p.battle <> hzFlat then r := ErrWrongRemedy
+  end
+  else if k = rmEndLimit then begin
+    if not p.limited then r := ErrNoNeed
+  end
+  else if IsSafety(k) then begin
+    if p.safe[SafetyIdx(k)] then r := ErrNoNeed
+  end
+  else r := ErrBadTarget;
+  CheckSelf := r
+end;
+
+{ RULE R3: a hazard needs a victim who can currently move; Limit needs only 'not limited'. }
+function CheckAttack(var o: PlayerState; k: CardKind): integer;
+var r: integer;
+begin
+  r := ErrOK;
+  if not IsHazard(k) then r := ErrBadTarget
+  else if k = hzLimit then begin
+    if o.safe[3] then r := ErrImmune
+    else if o.limited then r := ErrNoEffect
+  end
+  else if o.safe[SafetyIdx(SafetyFor(k))] then r := ErrImmune
+  else if not CanMoveNow(o) then r := ErrNoEffect;
+  CheckAttack := r
+end;
+
+function CheckPlay(var g: Game; handIdx: integer; t: Target): integer;
+var s: integer; k: CardKind;
+begin
+  s := g.turn;
+  CheckPlay := ErrOK;
+  if g.ph <> phPlay then CheckPlay := ErrPhase
+  else if (handIdx < 1) or (handIdx > g.pl[s].handN) then CheckPlay := ErrNoCard
+  else begin
+    k := g.pl[s].hand[handIdx];
+    if t = tgDiscard then CheckPlay := ErrOK
+    else if t = tgSelf then CheckPlay := CheckSelf(g.pl[s], k)
+    else CheckPlay := CheckAttack(g.pl[Opp(s)], k)
+  end
+end;
+
+function ErrText(e: integer): string;
+begin
+  ErrText := 'That play is not allowed.';
+  if e = ErrOK then ErrText := '';
+  if e = ErrPhase then ErrText := 'Draw a card first.';
+  if e = ErrNoCard then ErrText := 'Pick a card from your hand.';
+  if e = ErrNeedGo then ErrText := 'You need a Go card first.';
+  if e = ErrBlocked then ErrText := 'You must fix your problem before moving.';
+  if e = ErrLimit then ErrText := 'Speed limit: 50 miles or less.';
+  if e = Err200 then ErrText := 'Only two 200-mile cards per hand.';
+  if e = ErrOver then ErrText := 'That would go past 1000 miles.';
+  if e = ErrWrongRemedy then ErrText := 'That is not the right remedy.';
+  if e = ErrBadTarget then ErrText := 'That card cannot go there.';
+  if e = ErrImmune then ErrText := 'They are protected by a safety.';
+  if e = ErrNoEffect then ErrText := 'That would have no effect right now.';
+  if e = ErrNoNeed then ErrText := 'You do not need that.'
 end;
 
 {@IMPL}

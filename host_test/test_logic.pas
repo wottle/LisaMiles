@@ -85,11 +85,140 @@ begin
   Check(NormSeed(-2147483647 - 1) > 0, 'NormSeed(min) > 0')
 end;
 
+procedure SetHand(var d: Game; s: integer; a, b, c, e, f, h: CardKind);
+begin
+  d.pl[s].handN := 6;
+  d.pl[s].hand[1] := a; d.pl[s].hand[2] := b; d.pl[s].hand[3] := c;
+  d.pl[s].hand[4] := e; d.pl[s].hand[5] := f; d.pl[s].hand[6] := h
+end;
+
+procedure FreshPlay(var d: Game);
+begin
+  NewGame(d, 12345);
+  d.turn := 0;
+  d.ph := phPlay
+end;
+
+procedure TestMovement;
+begin
+  FreshPlay(g);
+  SetHand(g, 0, ck25, ck50, ck100, ck200, ck75, ck25);
+  CheckEq(CheckPlay(g, 1, tgSelf), ErrNeedGo, 'no Go: 25 refused');
+  g.pl[0].battle := rmGo;
+  CheckEq(CheckPlay(g, 1, tgSelf), ErrOK, 'Go: 25 ok');
+  g.pl[0].limited := true;
+  CheckEq(CheckPlay(g, 2, tgSelf), ErrOK, 'limit: 50 ok');
+  CheckEq(CheckPlay(g, 3, tgSelf), ErrLimit, 'limit: 100 refused');
+  CheckEq(CheckPlay(g, 5, tgSelf), ErrLimit, 'limit: 75 refused');
+  g.pl[0].safe[3] := true;
+  CheckEq(CheckPlay(g, 3, tgSelf), ErrOK, 'Right of Way ignores limit');
+  g.pl[0].safe[3] := false;
+  g.pl[0].limited := false;
+  g.pl[0].n200 := 2;
+  CheckEq(CheckPlay(g, 4, tgSelf), Err200, 'third 200 refused');
+  g.pl[0].n200 := 1;
+  CheckEq(CheckPlay(g, 4, tgSelf), ErrOK, 'second 200 ok');
+  g.pl[0].n200 := 0;
+  g.pl[0].miles := 800;
+  CheckEq(CheckPlay(g, 4, tgSelf), ErrOK, '800+200 = exactly 1000 ok');
+  g.pl[0].miles := 825;
+  CheckEq(CheckPlay(g, 4, tgSelf), ErrOver, '825+200 overshoots');
+  g.pl[0].miles := 975;
+  CheckEq(CheckPlay(g, 2, tgSelf), ErrOver, '975+50 overshoots');
+  CheckEq(CheckPlay(g, 1, tgSelf), ErrOK, '975+25 = exactly 1000 ok');
+  g.pl[0].miles := 0;
+  g.pl[0].battle := hzAccident;
+  CheckEq(CheckPlay(g, 1, tgSelf), ErrBlocked, 'accident blocks moving');
+  g.pl[0].battle := rmRepairs;
+  CheckEq(CheckPlay(g, 1, tgSelf), ErrNeedGo, 'after repairs still need Go')
+end;
+
+procedure TestRemedies;
+begin
+  FreshPlay(g);
+  SetHand(g, 0, rmRepairs, rmGas, rmSpare, rmEndLimit, rmGo, sfAce);
+  g.pl[0].battle := hzAccident;
+  CheckEq(CheckPlay(g, 1, tgSelf), ErrOK, 'repairs cure accident');
+  CheckEq(CheckPlay(g, 2, tgSelf), ErrWrongRemedy, 'gas does not cure accident');
+  CheckEq(CheckPlay(g, 3, tgSelf), ErrWrongRemedy, 'spare does not cure accident');
+  CheckEq(CheckPlay(g, 5, tgSelf), ErrWrongRemedy, 'Go cannot cure accident');
+  g.pl[0].battle := hzOutOfGas;
+  CheckEq(CheckPlay(g, 2, tgSelf), ErrOK, 'gas cures out of gas');
+  g.pl[0].battle := hzFlat;
+  CheckEq(CheckPlay(g, 3, tgSelf), ErrOK, 'spare cures flat');
+  g.pl[0].battle := hzStop;
+  CheckEq(CheckPlay(g, 5, tgSelf), ErrOK, 'Go cures stop');
+  g.pl[0].battle := rmGo;
+  CheckEq(CheckPlay(g, 5, tgSelf), ErrNoNeed, 'Go when already going');
+  CheckEq(CheckPlay(g, 4, tgSelf), ErrNoNeed, 'end limit when not limited');
+  g.pl[0].limited := true;
+  CheckEq(CheckPlay(g, 4, tgSelf), ErrOK, 'end limit when limited');
+  CheckEq(CheckPlay(g, 6, tgSelf), ErrOK, 'safety playable on self');
+  CheckEq(CheckPlay(g, 6, tgOpponent), ErrBadTarget, 'safety never playable on opponent');
+  SetHand(g, 0, hzStop, ck25, ck25, ck25, ck25, ck25);
+  CheckEq(CheckPlay(g, 1, tgSelf), ErrBadTarget, 'hazard cannot target self');
+  CheckEq(CheckPlay(g, 2, tgOpponent), ErrBadTarget, 'distance cannot target opponent')
+end;
+
+procedure TestAttacks;
+begin
+  FreshPlay(g);
+  SetHand(g, 0, hzStop, hzAccident, hzOutOfGas, hzFlat, hzLimit, ck25);
+  CheckEq(CheckPlay(g, 1, tgOpponent), ErrNoEffect, 'stop on non-moving opponent');
+  g.pl[1].battle := rmGo;
+  CheckEq(CheckPlay(g, 1, tgOpponent), ErrOK, 'stop on moving opponent');
+  CheckEq(CheckPlay(g, 2, tgOpponent), ErrOK, 'accident on moving opponent');
+  g.pl[1].safe[0] := true;
+  CheckEq(CheckPlay(g, 2, tgOpponent), ErrImmune, 'ace blocks accident');
+  CheckEq(CheckPlay(g, 3, tgOpponent), ErrOK, 'ace does not block out of gas');
+  g.pl[1].safe[0] := false;
+  g.pl[1].safe[3] := true;
+  CheckEq(CheckPlay(g, 1, tgOpponent), ErrImmune, 'Right of Way blocks stop');
+  CheckEq(CheckPlay(g, 5, tgOpponent), ErrImmune, 'Right of Way blocks limit');
+  g.pl[1].battle := ckNone;
+  CheckEq(CheckPlay(g, 2, tgOpponent), ErrOK, 'RoW holder with empty pile can be hit by accident');
+  g.pl[1].safe[3] := false;
+  g.pl[1].battle := rmGo;
+  g.pl[1].limited := true;
+  CheckEq(CheckPlay(g, 5, tgOpponent), ErrNoEffect, 'limit on already-limited opponent')
+end;
+
+procedure TestRoW;
+begin
+  FreshPlay(g);
+  SetHand(g, 0, ck100, rmGo, ck25, ck25, ck25, ck25);
+  g.pl[0].safe[3] := true;
+  CheckEq(CheckPlay(g, 1, tgSelf), ErrOK, 'RoW: moves with empty battle pile');
+  CheckEq(CheckPlay(g, 2, tgSelf), ErrNoNeed, 'RoW: Go is pointless');
+  g.pl[0].battle := hzAccident;
+  CheckEq(CheckPlay(g, 1, tgSelf), ErrBlocked, 'RoW: accident still blocks');
+  g.pl[0].battle := rmRepairs;
+  CheckEq(CheckPlay(g, 1, tgSelf), ErrOK, 'RoW: repairs alone is enough to move')
+end;
+
+procedure TestPhase;
+begin
+  FreshPlay(g);
+  SetHand(g, 0, ck25, ck25, ck25, ck25, ck25, ck25);
+  g.ph := phDraw;
+  CheckEq(CheckPlay(g, 1, tgDiscard), ErrPhase, 'cannot play before drawing');
+  g.ph := phPlay;
+  CheckEq(CheckPlay(g, 0, tgDiscard), ErrNoCard, 'index 0 invalid');
+  CheckEq(CheckPlay(g, 7, tgDiscard), ErrNoCard, 'index past hand invalid');
+  CheckEq(CheckPlay(g, 3, tgDiscard), ErrOK, 'discard always legal');
+  Check(length(ErrText(ErrNeedGo)) > 0, 'ErrText has text')
+end;
+
 {@TESTS}
 
 begin
   TestDeck;
   TestSeeds;
+  TestMovement;
+  TestRemedies;
+  TestAttacks;
+  TestRoW;
+  TestPhase;
   {@CALLS}
   Summary
 end.
