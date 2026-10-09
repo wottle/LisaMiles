@@ -1,0 +1,202 @@
+{ MILES-CTRL: what a mouse click or a tick of the clock DOES to the game.  Human = seat 0,   }
+{ computer = seat 1.  No Lisa units: tested on the Mac, compiled unchanged on the Lisa.     }
+{ The Lisa program only turns events into calls here and draws the result.                  }
+unit MilesCtrl;
+
+interface
+
+uses (*$U MILES/LOGIC.OBJ *) MilesLogic,
+     (*$U MILES/LAYOUT.OBJ *) MilesLayout;
+
+const
+  { Status codes 1..12 are the Err* codes of MilesLogic; these are the UI's own. }
+  MsgNone         = 0;
+  MsgYourDraw     = 20;
+  MsgYourPlay     = 21;
+  MsgComputerTurn = 22;
+  MsgComputerCoup = 23;
+  MsgHandOver     = 24;
+  MsgCoupAsk      = 25;
+  MsgAlreadyDrew  = 26;
+
+type
+  UIEvent = (ueNone, ueSelect, ueDeselect, ueDrew, ueMoved, ueRejected, ueCoupPrompt, ueHandOver);
+
+  UIState = record
+    sel        : integer;                 { selected hand card, 0 = none }
+    msg        : integer;                 { a message to show until the next action, or MsgNone }
+    handScored : boolean;                 { this hand's points are already in match[] }
+    match      : array[0..1] of longint;  { running match totals }
+  end;
+
+procedure UIInit(var u: UIState);
+procedure UINewHand(var u: UIState; var g: Game; seed: longint);
+procedure UIClick(var u: UIState; var g: Game; x, y: integer; var ev: UIEvent);
+procedure UIAdvance(var u: UIState; var g: Game; var ev: UIEvent);
+procedure UICoupAnswer(var u: UIState; var g: Game; useCoup: boolean; var ev: UIEvent);
+function  NaturalSlot(k: CardKind): integer;
+function  StatusMsg(var u: UIState; var g: Game): integer;
+
+implementation
+
+procedure UIInit(var u: UIState);
+begin
+  u.sel := 0;
+  u.msg := MsgNone;
+  u.handScored := false;
+  u.match[0] := 0;
+  u.match[1] := 0
+end;
+
+procedure UINewHand(var u: UIState; var g: Game; seed: longint);
+begin
+  NewGame(g, seed);
+  u.sel := 0;
+  u.msg := MsgNone;
+  u.handScored := false
+end;
+
+{ Which pile a card naturally lands on; the screen highlights it. }
+function NaturalSlot(k: CardKind): integer;
+begin
+  NaturalSlot := SlotBattle;
+  if IsDistance(k) then NaturalSlot := SlotMiles;
+  if k = rmEndLimit then NaturalSlot := SlotSpeed;
+  if k = hzLimit then NaturalSlot := SlotSpeed;
+  if IsSafety(k) then NaturalSlot := SlotSafety0 + SafetyIdx(k)
+end;
+
+{ When the hand has ended, score it exactly once and report ueHandOver. }
+procedure Finish(var u: UIState; var g: Game; var ev: UIEvent);
+begin
+  if g.ph = phOver then begin
+    if not u.handScored then begin
+      u.match[0] := u.match[0] + HandPoints(g, 0);
+      u.match[1] := u.match[1] + HandPoints(g, 1);
+      u.handScored := true
+    end;
+    u.sel := 0;
+    ev := ueHandOver
+  end
+end;
+
+procedure UIClick(var u: UIState; var g: Game; x, y: integer; var ev: UIEvent);
+var hit: HitInfo; err: integer; t: Target;
+begin
+  ev := ueNone;
+  if (g.ph = phDraw) and (g.turn = 0) then begin
+    HitTest(x, y, g.pl[0].handN, 0, hit);
+    if hit.kind = hkDraw then begin
+      DrawCard(g);
+      u.msg := MsgNone;
+      ev := ueDrew
+    end
+    else begin
+      u.msg := ErrPhase;
+      ev := ueRejected
+    end
+  end
+  else if (g.ph = phPlay) and (g.turn = 0) then begin
+    HitTest(x, y, g.pl[0].handN, u.sel, hit);
+    if hit.kind = hkHand then begin
+      u.msg := MsgNone;
+      if hit.index = u.sel then begin
+        u.sel := 0;
+        ev := ueDeselect
+      end
+      else begin
+        u.sel := hit.index;
+        ev := ueSelect
+      end
+    end
+    else if hit.kind = hkDraw then begin
+      u.msg := MsgAlreadyDrew;
+      ev := ueRejected
+    end
+    else if (hit.kind = hkOwn) or (hit.kind = hkOpp) or (hit.kind = hkDiscard) then begin
+      if u.sel = 0 then begin
+        u.msg := ErrNoCard;
+        ev := ueRejected
+      end
+      else begin
+        if hit.kind = hkOwn then t := tgSelf
+        else if hit.kind = hkOpp then t := tgOpponent
+        else t := tgDiscard;
+        DoPlay(g, u.sel, t, err);
+        if err = ErrOK then begin
+          u.sel := 0;
+          u.msg := MsgNone;
+          ev := ueMoved;
+          if g.ph = phCoup then begin       { the computer is the victim: it always answers }
+            ResolveCoup(g, true);
+            u.msg := MsgComputerCoup
+          end;
+          Finish(u, g, ev)
+        end
+        else begin
+          u.msg := err;
+          ev := ueRejected
+        end
+      end
+    end
+  end
+end;
+
+{ One computer action.  The Lisa program calls this on a timer so moves are visible. }
+procedure UIAdvance(var u: UIState; var g: Game; var ev: UIEvent);
+var mv: PlayMove; err: integer;
+begin
+  ev := ueNone;
+  if g.ph = phCoup then begin
+    if g.coupSeat = 0 then begin
+      u.msg := MsgCoupAsk;
+      ev := ueCoupPrompt
+    end
+    else begin
+      ResolveCoup(g, true);
+      u.msg := MsgComputerCoup;
+      ev := ueMoved;
+      Finish(u, g, ev)
+    end
+  end
+  else if (g.ph = phDraw) and (g.turn = 1) then begin
+    DrawCard(g);
+    u.msg := MsgNone;
+    ev := ueDrew
+  end
+  else if (g.ph = phPlay) and (g.turn = 1) then begin
+    AIChoose(g, mv);
+    DoPlay(g, mv.hand, mv.tgt, err);
+    u.msg := MsgNone;
+    ev := ueMoved;
+    if g.ph = phCoup then begin
+      if g.coupSeat = 0 then begin
+        u.msg := MsgCoupAsk;
+        ev := ueCoupPrompt
+      end
+    end;
+    Finish(u, g, ev)
+  end
+  else if g.ph = phOver then
+    Finish(u, g, ev)
+end;
+
+procedure UICoupAnswer(var u: UIState; var g: Game; useCoup: boolean; var ev: UIEvent);
+begin
+  ev := ueMoved;
+  ResolveCoup(g, useCoup);
+  u.msg := MsgNone;
+  Finish(u, g, ev)
+end;
+
+function StatusMsg(var u: UIState; var g: Game): integer;
+begin
+  if u.msg <> MsgNone then StatusMsg := u.msg
+  else if g.ph = phOver then StatusMsg := MsgHandOver
+  else if g.ph = phCoup then StatusMsg := MsgCoupAsk
+  else if g.turn = 1 then StatusMsg := MsgComputerTurn
+  else if g.ph = phDraw then StatusMsg := MsgYourDraw
+  else StatusMsg := MsgYourPlay
+end;
+
+end.

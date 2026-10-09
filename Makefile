@@ -18,10 +18,14 @@ build/mileslayout.pas: src/MILES-LAYOUT.TEXT
 	@mkdir -p build
 	$(STRIP) $< > $@
 
+build/milesctrl.pas: src/MILES-CTRL.TEXT
+	@mkdir -p build
+	$(STRIP) $< > $@
+
 build/test_logic: build/mileslogic.pas host_test/test_logic.pas host_test/testkit.pas
 	$(FPC) $(FPCOPTS) host_test/test_logic.pas
 
-build/test_ui: build/mileslayout.pas host_test/test_ui.pas host_test/testkit.pas
+build/test_ui: build/mileslogic.pas build/mileslayout.pas build/milesctrl.pas host_test/test_ui.pas host_test/testkit.pas
 	$(FPC) $(FPCOPTS) host_test/test_ui.pas
 
 build/sim: build/mileslogic.pas host_test/sim.pas
