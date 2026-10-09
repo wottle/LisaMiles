@@ -209,6 +209,187 @@ begin
   Check(length(ErrText(ErrNeedGo)) > 0, 'ErrText has text')
 end;
 
+procedure TestDrawPlay;
+var err: integer;
+begin
+  NewGame(g, 7);
+  DrawCard(g);
+  CheckEq(g.pl[0].handN, 7, 'draw: 7 cards');
+  CheckEq(RemainingDeck(g), 93, 'draw: 93 left');
+  Check(g.ph = phPlay, 'draw: play phase');
+  g.pl[0].battle := rmGo;
+  g.pl[0].hand[1] := ck50;
+  DoPlay(g, 1, tgSelf, err);
+  CheckEq(err, ErrOK, 'play 50 ok');
+  CheckEq(g.pl[0].miles, 50, 'miles are 50');
+  CheckEq(g.pl[0].handN, 6, 'hand back to 6');
+  CheckEq(g.turn, 1, 'turn passes');
+  Check(g.ph = phDraw, 'next player draws');
+  CheckEq(g.gone, 1, 'one card gone')
+end;
+
+procedure TestIllegalNoChange;
+var err: integer;
+begin
+  FreshPlay(g);
+  SetHand(g, 0, ck25, ck25, ck25, ck25, ck25, ck25);
+  DoPlay(g, 1, tgSelf, err);
+  CheckEq(err, ErrNeedGo, 'illegal play reports why');
+  CheckEq(g.pl[0].handN, 6, 'illegal play keeps hand');
+  CheckEq(g.turn, 0, 'illegal play keeps turn');
+  Check(g.ph = phPlay, 'illegal play keeps phase');
+  CheckEq(g.gone, 0, 'illegal play removes nothing')
+end;
+
+procedure TestDiscard;
+var err: integer;
+begin
+  FreshPlay(g);
+  SetHand(g, 0, ck25, hzStop, ck25, ck25, ck25, ck25);
+  DoPlay(g, 2, tgDiscard, err);
+  CheckEq(err, ErrOK, 'discard ok');
+  Check(g.discardTop = hzStop, 'discard pile shows top');
+  CheckEq(g.turn, 1, 'discard ends turn');
+  CheckEq(g.pl[0].handN, 5, 'discard shrinks hand')
+end;
+
+procedure TestSafeties;
+var err: integer;
+begin
+  FreshPlay(g);
+  SetHand(g, 0, sfAce, sfTank, sfPunct, sfRoW, ck25, ck25);
+  g.pl[0].battle := hzAccident;
+  DoPlay(g, 1, tgSelf, err);
+  CheckEq(err, ErrOK, 'play ace');
+  Check(g.pl[0].safe[0], 'ace now in play');
+  Check(g.pl[0].battle = rmRepairs, 'ace cures accident');
+  CheckEq(g.turn, 0, 'safety gives extra turn (R1)');
+  Check(g.ph = phDraw, 'extra turn starts with a draw');
+  g.ph := phPlay;
+  g.pl[0].battle := hzOutOfGas;
+  DoPlay(g, 1, tgSelf, err);
+  Check(g.pl[0].battle = rmGas, 'tank cures out of gas');
+  g.ph := phPlay;
+  g.pl[0].battle := hzFlat;
+  DoPlay(g, 1, tgSelf, err);
+  Check(g.pl[0].battle = rmSpare, 'puncture-proof cures flat');
+  g.ph := phPlay;
+  g.pl[0].battle := hzStop;
+  g.pl[0].limited := true;
+  DoPlay(g, 1, tgSelf, err);
+  Check(g.pl[0].battle = rmGo, 'RoW clears stop');
+  Check(not g.pl[0].limited, 'RoW clears limit');
+  Check(g.pl[0].safe[3], 'RoW now in play')
+end;
+
+procedure SetupCoup(var d: Game; haz, sf: CardKind);
+begin
+  FreshPlay(d);
+  SetHand(d, 0, haz, ck25, ck25, ck25, ck25, ck25);
+  SetHand(d, 1, sf, ck50, ck50, ck50, ck50, ck50);
+  d.pl[1].battle := rmGo
+end;
+
+procedure TestCoup;
+var err, before: integer;
+begin
+  SetupCoup(g, hzAccident, sfAce);
+  DoPlay(g, 1, tgOpponent, err);
+  CheckEq(err, ErrOK, 'coup: attack ok');
+  Check(g.ph = phCoup, 'coup: waiting for decision');
+  CheckEq(g.coupSeat, 1, 'coup: victim is seat 1');
+  Check(g.pl[1].battle = hzAccident, 'coup: hazard is applied until resolved');
+  before := RemainingDeck(g);
+  ResolveCoup(g, true);
+  Check(g.pl[1].safe[0], 'coup: ace in play');
+  Check(g.pl[1].viaCoup[0], 'coup: flagged as coup');
+  Check(g.pl[1].battle = rmGo, 'coup: prior battle state restored');
+  CheckEq(g.pl[1].handN, 6, 'coup: replacement drawn');
+  CheckEq(RemainingDeck(g), before - 1, 'coup: one card from the pile');
+  CheckEq(g.turn, 1, 'coup: victim takes the next turn (R2)');
+  Check(g.ph = phDraw, 'coup: turn starts with a draw');
+  CheckEq(g.pl[0].handN, 5, 'coup: attacker lost the hazard card');
+
+  SetupCoup(g, hzAccident, sfAce);
+  DoPlay(g, 1, tgOpponent, err);
+  ResolveCoup(g, false);
+  Check(g.pl[1].battle = hzAccident, 'decline: hazard stands');
+  Check(not g.pl[1].safe[0], 'decline: safety stays in hand');
+  CheckEq(g.turn, 1, 'decline: turn passes');
+  Check(g.ph = phDraw, 'decline: victim draws next');
+
+  SetupCoup(g, hzStop, sfRoW);
+  DoPlay(g, 1, tgOpponent, err);
+  Check(g.ph = phCoup, 'coup: stop answered by RoW');
+  ResolveCoup(g, true);
+  Check(g.pl[1].battle = rmGo, 'coup: stop undone');
+  Check(g.pl[1].safe[3], 'coup: RoW in play');
+
+  SetupCoup(g, hzLimit, sfRoW);
+  DoPlay(g, 1, tgOpponent, err);
+  Check(g.pl[1].limited, 'coup: limit applied');
+  ResolveCoup(g, true);
+  Check(not g.pl[1].limited, 'coup: limit undone');
+
+  SetupCoup(g, hzAccident, sfTank);
+  DoPlay(g, 1, tgOpponent, err);
+  Check(g.ph = phDraw, 'no matching safety: no coup window');
+  CheckEq(g.turn, 1, 'no matching safety: turn passes');
+
+  SetupCoup(g, hzAccident, sfAce);
+  g.deckNext := NumCards + 1;
+  g.pl[1].handN := 1;
+  g.pl[1].hand[1] := sfAce;
+  DoPlay(g, 1, tgOpponent, err);
+  ResolveCoup(g, true);
+  CheckEq(g.pl[1].handN, 0, 'coup with empty pile: no replacement');
+  CheckEq(g.turn, 0, 'coup with empty pile and empty hand: no stuck turn');
+  Check(g.ph = phDraw, 'coup with empty pile: play continues')
+end;
+
+procedure TestWin;
+var err: integer;
+begin
+  FreshPlay(g);
+  SetHand(g, 0, ck25, ck25, ck25, ck25, ck25, ck25);
+  g.pl[0].battle := rmGo;
+  g.pl[0].miles := 975;
+  DoPlay(g, 1, tgSelf, err);
+  CheckEq(err, ErrOK, 'win: 975+25 ok');
+  Check(g.ph = phOver, 'win: hand over');
+  CheckEq(g.tripBy, 0, 'win: seat 0 completed the trip');
+  Check(not g.delayedTrip, 'win: not delayed with cards left');
+  FreshPlay(g);
+  SetHand(g, 0, ck25, ck25, ck25, ck25, ck25, ck25);
+  g.pl[0].battle := rmGo;
+  g.pl[0].miles := 975;
+  g.deckNext := NumCards + 1;
+  DoPlay(g, 1, tgSelf, err);
+  Check(g.delayedTrip, 'win: delayed once the pile is empty')
+end;
+
+procedure TestDeckEmpty;
+var err: integer;
+begin
+  FreshPlay(g);
+  g.deckNext := NumCards + 1;
+  g.pl[0].handN := 1; g.pl[0].hand[1] := ck25;
+  g.pl[1].handN := 0;
+  DoPlay(g, 1, tgDiscard, err);
+  Check(g.ph = phOver, 'both hands empty ends the hand');
+
+  FreshPlay(g);
+  g.deckNext := NumCards + 1;
+  g.pl[0].handN := 2; g.pl[0].hand[1] := ck25; g.pl[0].hand[2] := ck25;
+  g.pl[1].handN := 0;
+  DoPlay(g, 1, tgDiscard, err);
+  CheckEq(g.turn, 0, 'opponent with no cards is skipped');
+  Check(g.ph = phDraw, 'skipped turn continues in draw phase');
+  DrawCard(g);
+  Check(g.ph = phPlay, 'drawing from an empty pile just moves to play');
+  CheckEq(g.pl[0].handN, 1, 'empty pile draws nothing')
+end;
+
 {@TESTS}
 
 begin
@@ -219,6 +400,13 @@ begin
   TestAttacks;
   TestRoW;
   TestPhase;
+  TestDrawPlay;
+  TestIllegalNoChange;
+  TestDiscard;
+  TestSafeties;
+  TestCoup;
+  TestWin;
+  TestDeckEmpty;
   {@CALLS}
   Summary
 end.

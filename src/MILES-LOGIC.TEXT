@@ -82,6 +82,10 @@ procedure NewGame(var g: Game; seed: longint);
 function  CanMoveNow(var p: PlayerState): boolean;
 function  CheckPlay(var g: Game; handIdx: integer; t: Target): integer;
 function  ErrText(e: integer): string;
+function  HandIndexOf(var p: PlayerState; k: CardKind): integer;
+procedure DrawCard(var g: Game);
+procedure DoPlay(var g: Game; handIdx: integer; t: Target; var err: integer);
+procedure ResolveCoup(var g: Game; useCoup: boolean);
 {@IFACE}
 
 implementation
@@ -332,6 +336,146 @@ begin
   if e = ErrImmune then ErrText := 'They are protected by a safety.';
   if e = ErrNoEffect then ErrText := 'That would have no effect right now.';
   if e = ErrNoNeed then ErrText := 'You do not need that.'
+end;
+
+function HandIndexOf(var p: PlayerState; k: CardKind): integer;
+var i, r: integer;
+begin
+  r := 0;
+  for i := p.handN downto 1 do
+    if p.hand[i] = k then r := i;
+  HandIndexOf := r
+end;
+
+procedure RemoveFromHand(var g: Game; s, idx: integer);
+var i: integer;
+begin
+  for i := idx to g.pl[s].handN - 1 do
+    g.pl[s].hand[i] := g.pl[s].hand[i + 1];
+  g.pl[s].handN := g.pl[s].handN - 1;
+  g.gone := g.gone + 1
+end;
+
+{ RULE R5: ends the hand at exactly 1000, or when the pile and both hands are empty. }
+procedure EndTurn(var g: Game);
+var nxt: integer;
+begin
+  if g.pl[g.turn].miles = TripMiles then begin
+    g.tripBy := g.turn;
+    g.delayedTrip := (g.deckNext > NumCards);
+    g.ph := phOver
+  end
+  else begin
+    nxt := Opp(g.turn);
+    if g.deckNext > NumCards then begin
+      if (g.pl[0].handN = 0) and (g.pl[1].handN = 0) then g.ph := phOver
+      else begin
+        if g.pl[nxt].handN > 0 then g.turn := nxt;
+        g.ph := phDraw
+      end
+    end
+    else begin
+      g.turn := nxt;
+      g.ph := phDraw
+    end
+  end
+end;
+
+procedure ExtraTurn(var g: Game);
+begin
+  if SafetyExtraTurn and ((g.deckNext <= NumCards) or (g.pl[g.turn].handN > 0)) then
+    g.ph := phDraw
+  else
+    EndTurn(g)
+end;
+
+procedure ApplySelf(var g: Game; s: integer; k: CardKind);
+begin
+  with g.pl[s] do begin
+    if IsDistance(k) then begin
+      miles := miles + DistValue(k);
+      if k = ck200 then n200 := n200 + 1
+    end
+    else if k = rmGo then battle := rmGo
+    else if (k = rmRepairs) or (k = rmGas) or (k = rmSpare) then battle := k
+    else if k = rmEndLimit then limited := false
+    else begin
+      safe[SafetyIdx(k)] := true;
+      if (k = sfAce) and (battle = hzAccident) then battle := rmRepairs;
+      if (k = sfTank) and (battle = hzOutOfGas) then battle := rmGas;
+      if (k = sfPunct) and (battle = hzFlat) then battle := rmSpare;
+      if k = sfRoW then begin
+        limited := false;
+        if battle = hzStop then battle := rmGo
+      end
+    end
+  end
+end;
+
+procedure DrawCard(var g: Game);
+begin
+  if g.ph = phDraw then begin
+    DealTo(g, g.turn);
+    g.ph := phPlay
+  end
+end;
+
+procedure DoPlay(var g: Game; handIdx: integer; t: Target; var err: integer);
+var s, o: integer; k: CardKind;
+begin
+  err := CheckPlay(g, handIdx, t);
+  if err = ErrOK then begin
+    s := g.turn;
+    o := Opp(s);
+    k := g.pl[s].hand[handIdx];
+    RemoveFromHand(g, s, handIdx);
+    if t = tgDiscard then begin
+      g.discardTop := k;
+      EndTurn(g)
+    end
+    else if t = tgOpponent then begin
+      g.coupHazard := k;
+      g.prevBattle := g.pl[o].battle;
+      g.prevLimited := g.pl[o].limited;
+      if k = hzLimit then g.pl[o].limited := true
+      else g.pl[o].battle := k;
+      if HandIndexOf(g.pl[o], SafetyFor(k)) > 0 then begin
+        g.coupSeat := o;
+        g.ph := phCoup
+      end
+      else EndTurn(g)
+    end
+    else begin
+      ApplySelf(g, s, k);
+      if IsSafety(k) then ExtraTurn(g) else EndTurn(g)
+    end
+  end
+end;
+
+{ RULE R2: a coup undoes the hazard, draws a replacement, and the victim takes the next turn. }
+procedure ResolveCoup(var g: Game; useCoup: boolean);
+var c, i: integer; sf: CardKind;
+begin
+  if g.ph = phCoup then begin
+    c := g.coupSeat;
+    sf := SafetyFor(g.coupHazard);
+    i := HandIndexOf(g.pl[c], sf);
+    g.coupSeat := -1;
+    if useCoup and (i > 0) then begin
+      RemoveFromHand(g, c, i);
+      g.pl[c].safe[SafetyIdx(sf)] := true;
+      g.pl[c].viaCoup[SafetyIdx(sf)] := true;
+      g.pl[c].battle := g.prevBattle;
+      g.pl[c].limited := g.prevLimited;
+      DealTo(g, c);
+      if g.pl[c].handN = 0 then EndTurn(g)
+      else begin
+        g.turn := c;
+        g.ph := phDraw
+      end
+    end
+    else EndTurn(g)
+  end
 end;
 
 {@IMPL}
