@@ -30,3 +30,12 @@ ls /dev/cu.*                        # find the serial adapter, e.g. /dev/cu.usbs
 ## Decision
 - Which target is the primary test loop? ______
 - Is `LisaEm` usable for UI smoke tests (yes/no/partial)? ______
+
+## C. MILES-LOGIC first compile (do after A works)
+Files to send with the transfer script (it turns `-` into `/`): `src/MILES-LOGIC.TEXT` arrives as
+`MILES/LOGIC.TEXT`, `src/MILES-LCOMP.TEXT` as `MILES/LCOMP.TEXT`.
+1. Transfer both files to the Lisa. Result: ______
+2. In Workshop run `<MILES/LCOMP`. Expected: compiles with no errors and `MILES/LOGIC.OBJ` exists.
+3. Paste the full compiler output here: ______
+4. If anything is rejected, send the exact error text back: the fix is made in `MILES-LOGIC.TEXT`,
+   re-verified on the Mac (`make all`), and a rule is added to `tools/lint_lisa_subset.py`.

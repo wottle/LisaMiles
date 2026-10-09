@@ -1,0 +1,49 @@
+$EXEC
+${=============================================================================}
+${ MINESWEEPER-LINK.TEXT -- link the five Minesweeper objects with the        }
+${ standard runtime libraries into one executable.                            }
+${                                                                            }
+${ Input order: main program + our own (regular) units first, standard        }
+${ libraries last -- the convention of every shipped LINK script              }
+${ (02-workshop-build 7.1).  The intrinsic units we 'uses' (QuickDraw, the    }
+${ WM units, AlertMgr, fieldedit, FEdec, dbenv ...) are NOT named here: the   }
+${ linker resolves them through INTRINSIC.LIB automatically and they are      }
+${ shared at run time (02-workshop-build 7.4).                                }
+${                                                                            }
+${ Library choices (02-workshop-build 7.2):                                   }
+${   IOSPASLIB - always: the Pascal runtime itself.                           }
+${   SYS1LIB   - always for a graphical app: WM / Events / Menus code.        }
+${   SYS2LIB   - the second tranche of system-library code; the Calculator    }
+${               (whose library surface ours resembles) links it.             }
+${   PRLIB     - the printing runtime: supplies the BODIES behind PrPublic    }
+${               (PrMgr, PrSpool -- 06-lib-pr-a A.3), i.e. the Format for     }
+${               Printer / Print / Monitor commands.  (It was on this list    }
+${               before the program printed at all, because every bundled     }
+${               app links it; now it is load-bearing.)                       }
+${   IOSFPLIB  - ABSENT, deliberately: Minesweeper is integer arithmetic      }
+${               throughout, no real variables anywhere, so the floating-     }
+${               point runtime has nothing to resolve.                        }
+${                                                                            }
+${ Success is the linker's verdict line 'The output is executable.'  An       }
+${ unresolved reference to a routine we 'uses'd means a MISSING LIBRARY on    }
+${ this list, not a code bug (02-workshop-build 7.2, 13).                     }
+${=============================================================================}
+${                                                                            }
+${ Delete the stale executable first (a stale object silently poisons the    }
+${ build -- 02-workshop-build 13).                                            }
+F{ilemgr}D{elete}MINESWEEPER/MINESWEEPER.OBJ  Y{es}
+        Q{uit}
+${                                                                            }
+L{inker}MINESWEEPER/MAIN.OBJ
+MINESWEEPER/GLOBALS.OBJ
+MINESWEEPER/GAME.OBJ
+MINESWEEPER/DRAW.OBJ
+MINESWEEPER/DIALOG.OBJ
+IOSPASLIB.OBJ
+SYS1LIB.OBJ
+SYS2LIB.OBJ
+PRLIB.OBJ
+{end of the input list - this comment-only line is the blank [RETURN] answer}
+{no listing file - second blank answer}
+MINESWEEPER/MINESWEEPER.OBJ
+$ENDEXEC

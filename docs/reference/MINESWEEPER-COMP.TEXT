@@ -1,0 +1,47 @@
+$EXEC
+${=============================================================================}
+${ MINESWEEPER-COMP.TEXT -- compile every Minesweeper source, in DEPENDENCY   }
+${ ORDER.  Order is not a preference: the compiler reads a used unit's        }
+${ interface out of its already-compiled .OBJ (the $U mechanism), so a unit   }
+${ must be compiled before anything that uses it (02-workshop-build 5.2/5.4). }
+${   MSGlobals -> MSGame -> MSDraw -> MSDialog -> the main program.           }
+${                                                                            }
+${ Comment-only lines in this file are exec lines (leading $): a Workshop     }
+${ line that is nothing but a comment still emits a stray [RETURN] into       }
+${ whatever subsystem is reading input (02-workshop-build 4.1) -- EXCEPT      }
+${ where that [RETURN] is exactly the answer we want, namely the compiler's   }
+${ "listing file?" prompt, where the comment-only line below each P command   }
+${ is the documented idiom for "no listing" (02-workshop-build 5.1).          }
+${=============================================================================}
+${                                                                            }
+${ Delete stale objects first: the compiler and linker happily reuse a stale  }
+${ .OBJ left lying around, which silently poisons the build (02-workshop-     }
+${ build section 13).                                                         }
+F{ilemgr}D{elete}MINESWEEPER/GLOBALS.OBJ  Y{es}
+        D{elete}MINESWEEPER/GAME.OBJ  Y{es}
+        D{elete}MINESWEEPER/DRAW.OBJ  Y{es}
+        D{elete}MINESWEEPER/DIALOG.OBJ  Y{es}
+        D{elete}MINESWEEPER/MAIN.OBJ  Y{es}
+        Q{uit}
+${                                                                            }
+${ Each compile is the inline three-answer P block (source / no listing /     }
+${ object) rather than a $SUBMIT BUILD/COMP(...) call, so this script does    }
+${ not depend on the BUILD wrapper execs being present (02-workshop-build     }
+${ 4.6 offers exactly this substitution).                                     }
+${                                                                            }
+P{ascal Compile}MINESWEEPER/GLOBALS.TEXT
+{no listing file - this comment-only line IS the [RETURN] answer}
+MINESWEEPER/GLOBALS.OBJ
+P{ascal Compile}MINESWEEPER/GAME.TEXT
+{no listing file}
+MINESWEEPER/GAME.OBJ
+P{ascal Compile}MINESWEEPER/DRAW.TEXT
+{no listing file}
+MINESWEEPER/DRAW.OBJ
+P{ascal Compile}MINESWEEPER/DIALOG.TEXT
+{no listing file}
+MINESWEEPER/DIALOG.OBJ
+P{ascal Compile}MINESWEEPER/MAIN.TEXT
+{no listing file}
+MINESWEEPER/MAIN.OBJ
+$ENDEXEC
