@@ -86,6 +86,7 @@ function  HandIndexOf(var p: PlayerState; k: CardKind): integer;
 procedure DrawCard(var g: Game);
 procedure DoPlay(var g: Game; handIdx: integer; t: Target; var err: integer);
 procedure ResolveCoup(var g: Game; useCoup: boolean);
+function  HandPoints(var g: Game; s: integer): longint;
 {@IFACE}
 
 implementation
@@ -476,6 +477,27 @@ begin
     end
     else EndTurn(g)
   end
+end;
+
+function HandPoints(var g: Game; s: integer): longint;
+var i, nsafe: integer; pts: longint;
+begin
+  pts := g.pl[s].miles;
+  nsafe := 0;
+  for i := 0 to 3 do
+    if g.pl[s].safe[i] then begin
+      nsafe := nsafe + 1;
+      pts := pts + PtSafety;
+      if g.pl[s].viaCoup[i] then pts := pts + PtCoup
+    end;
+  if nsafe = 4 then pts := pts + PtAllSafe;
+  if g.tripBy = s then begin
+    pts := pts + PtTrip;
+    if g.delayedTrip then pts := pts + PtDelayed;
+    if g.pl[s].n200 = 0 then pts := pts + PtSafeTrip;
+    if g.pl[Opp(s)].miles = 0 then pts := pts + PtShutout
+  end;
+  HandPoints := pts
 end;
 
 {@IMPL}

@@ -390,6 +390,36 @@ begin
   CheckEq(g.pl[0].handN, 1, 'empty pile draws nothing')
 end;
 
+procedure TestScoring;
+begin
+  NewGame(g, 3);
+  g.pl[0].miles := 350;
+  CheckEq(HandPoints(g, 0), 350, 'score: miles only');
+
+  NewGame(g, 3);
+  g.pl[0].safe[0] := true;
+  g.pl[0].safe[1] := true;  g.pl[0].viaCoup[1] := true;
+  CheckEq(HandPoints(g, 0), 100 + 100 + 300, 'score: two safeties, one coup');
+
+  NewGame(g, 3);
+  g.pl[0].safe[0] := true; g.pl[0].safe[1] := true;
+  g.pl[0].safe[2] := true; g.pl[0].safe[3] := true;
+  CheckEq(HandPoints(g, 0), 400 + 300, 'score: all four safeties bonus');
+
+  NewGame(g, 3);
+  g.pl[0].miles := 1000; g.pl[0].n200 := 1; g.pl[1].miles := 300;
+  g.tripBy := 0;
+  CheckEq(HandPoints(g, 0), 1000 + 400, 'score: plain trip with a 200');
+  CheckEq(HandPoints(g, 1), 300, 'score: loser keeps miles only');
+
+  g.pl[0].n200 := 0;
+  CheckEq(HandPoints(g, 0), 1000 + 400 + 300, 'score: safe trip bonus');
+  g.delayedTrip := true;
+  CheckEq(HandPoints(g, 0), 1000 + 400 + 300 + 300, 'score: delayed bonus');
+  g.pl[1].miles := 0;
+  CheckEq(HandPoints(g, 0), 1000 + 400 + 300 + 300 + 500, 'score: shutout bonus')
+end;
+
 {@TESTS}
 
 begin
@@ -407,6 +437,7 @@ begin
   TestCoup;
   TestWin;
   TestDeckEmpty;
+  TestScoring;
   {@CALLS}
   Summary
 end.
