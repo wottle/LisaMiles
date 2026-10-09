@@ -127,10 +127,12 @@ def draw_icon(name):
         d.rectangle([s(23), s(18), s(47), s(42)], fill=BLACK)
         d.rectangle([s(6), s(88), s(64), s(97)], fill=BLACK)
         d.line(pts([(56, 30), (76, 30), (76, 66), (68, 76)]), fill=BLACK, width=s(7))
-    elif name == "flat":                  # squashed tire on the ground
-        d.ellipse([s(6), s(30), s(94), s(86)], outline=BLACK, width=s(11))
-        circle(d, 50, 58, 8, fill=BLACK)
-        d.line(pts([(2, 92), (98, 92)]), fill=BLACK, width=s(7))
+    elif name == "flat":                  # round tire, flattened where it meets the ground
+        circle(d, 50, 44, 38, outline=BLACK, width=s(11))
+        d.rectangle([0, s(74), 100 * S, 100 * S], fill=WHITE)         # cut the bottom off
+        d.rectangle([s(26), s(70), s(74), s(77)], fill=BLACK)         # the flat contact edge
+        d.rectangle([s(4), s(77), s(96), s(84)], fill=BLACK)          # the ground
+        circle(d, 50, 44, 7, fill=BLACK)
     elif name in ("limit", "endlimit"):
         circle(d, 50, 50, 45, outline=BLACK, width=s(9))
         f = ImageFont.truetype(FONT, s(40))
@@ -140,10 +142,16 @@ def draw_icon(name):
         if name == "endlimit":
             d.line(pts([(84, 16), (16, 84)]), fill=WHITE, width=s(17))
             d.line(pts([(84, 16), (16, 84)]), fill=BLACK, width=s(8))
-    elif name == "repairs":               # wrench
-        d.line(pts([(18, 88), (62, 44)]), fill=BLACK, width=s(14))
-        circle(d, 68, 36, 22, fill=BLACK)
-        d.polygon(pts([(68, 36), (100, 12), (100, 48)]), fill=WHITE)
+    elif name == "repairs":               # open-end wrench: drawn flat, then turned 45 degrees
+        w = Image.new("L", im.size, WHITE)
+        wd = ImageDraw.Draw(w)
+        wd.rounded_rectangle([s(14), s(43), s(68), s(57)], radius=s(5), fill=BLACK)   # handle
+        wd.ellipse([s(2), s(36), s(26), s(64)], fill=BLACK)                          # ring end
+        wd.ellipse([s(9), s(44), s(19), s(56)], fill=WHITE)
+        wd.ellipse([s(52), s(24), s(96), s(76)], fill=BLACK)                         # jaw head
+        wd.rectangle([s(72), s(40), s(100), s(60)], fill=WHITE)                      # U-shaped slot
+        wd.ellipse([s(66), s(40), s(80), s(60)], fill=WHITE)
+        im = w.rotate(45, resample=Image.BICUBIC, fillcolor=WHITE)
     elif name == "fuel":                  # jerry can
         d.rectangle([s(18), s(32), s(74), s(94)], outline=BLACK, width=s(8))
         d.polygon(pts([(58, 32), (58, 10), (84, 10), (84, 18), (70, 18), (70, 32)]), fill=BLACK)
