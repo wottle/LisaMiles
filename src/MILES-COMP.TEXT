@@ -3,7 +3,7 @@ ${=============================================================================}
 ${ MILES-COMP.TEXT -- compile every 1000 Miles source in DEPENDENCY ORDER.      }
 ${ The compiler reads a used unit's interface out of its already-compiled .OBJ, }
 ${ so a unit must be compiled before anything that uses it:                     }
-${   LOGIC -> LAYOUT -> CTRL -> GLOBALS -> DRAW -> MAIN                         }
+${   LOGIC -> ICONS -> LAYOUT -> CTRL -> GLOBALS -> DRAW -> MAIN                 }
 ${                                                                            }
 ${ Comment-only lines are written as exec lines (leading $) so they do not send }
 ${ a stray [RETURN] into the program that is reading input -- EXCEPT the one    }
@@ -11,6 +11,7 @@ ${ under each Pascal command, which IS the [RETURN] answering "listing file?".  
 ${ Stale .OBJ files are deleted first so an old object can never be reused.     }
 ${=============================================================================}
 F{ilemgr}D{elete}MILES/LOGIC.OBJ  Y{es}
+        D{elete}MILES/ICONS.OBJ  Y{es}
         D{elete}MILES/LAYOUT.OBJ  Y{es}
         D{elete}MILES/CTRL.OBJ  Y{es}
         D{elete}MILES/GLOBALS.OBJ  Y{es}
@@ -20,6 +21,9 @@ F{ilemgr}D{elete}MILES/LOGIC.OBJ  Y{es}
 P{ascal Compile}MILES/LOGIC.TEXT
 {no listing file - this comment-only line IS the [RETURN] answer}
 MILES/LOGIC.OBJ
+P{ascal Compile}MILES/ICONS.TEXT
+{no listing file}
+MILES/ICONS.OBJ
 P{ascal Compile}MILES/LAYOUT.TEXT
 {no listing file}
 MILES/LAYOUT.OBJ

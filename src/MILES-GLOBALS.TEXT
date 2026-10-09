@@ -82,6 +82,10 @@ var
    ui        : UIState;     { selection, status message, match totals }
    haveGame  : boolean;     { has a hand been dealt yet? }
    nextAi    : longint;     { Time value at which the computer may act next }
+   unitsPerSec : longint;   { Window Manager clock units per REAL second (100 on a stock Lisa) }
+   calTime0  : longint;     { Time at the start of the current calibration run }
+   calSecs0  : longint;     { real seconds (battery clock) at the same moment }
+   nextCalPoll : longint;   { Time before which the real clock is not read again }
 
    capText   : array [ckNone..sfRoW] of CapStr;   { card captions, loaded at start }
    lblComputer, lblYou, lblMiles, lblMatch, lblNext : CapStr;
@@ -90,6 +94,9 @@ procedure NumToStr (n : longint; var s : Str255);
 procedure GetPhrase (n : integer; var s : Str255);
 procedure LoadCaptions;
 procedure HandleFilerOp (var wantsOpen : boolean);
+procedure InitClockCal;
+procedure CalibrateClock;
+function ScaleUnits (n : longint) : longint;
 
 IMPLEMENTATION
 
@@ -113,6 +120,53 @@ begin
       end;
       divisor := divisor div 10
    end
+end;
+
+{ Seconds from the battery-backed clock: real time, however fast the CPU runs.  (Get_Time has  }
+{ one-second resolution; the Window Manager's Time and event times tick on the CPU clock, so    }
+{ they run faster when the Lisa is overclocked.)                                                }
+function RealSecs : longint;
+var err : integer;
+    t   : Time_Rec;
+begin
+   Get_Time(err, t);
+   RealSecs := ((ord4(t.day) * 24 + t.hour) * 60 + t.minute) * 60 + t.second
+end;
+
+{ Start measuring how many Window Manager clock units make a real second. }
+procedure InitClockCal {};
+begin
+   unitsPerSec := 100;
+   calTime0 := Time;
+   calSecs0 := RealSecs;
+   nextCalPoll := 0
+end;
+
+{ Cheap enough to call on every idle pass: it reads the real clock only twice a second, and recomputes }
+{ the speed every ten real seconds.                                                                  }
+procedure CalibrateClock {};
+var secs : longint;
+begin
+   if Time < nextCalPoll then exit(CalibrateClock);
+   nextCalPoll := Time + unitsPerSec div 2;
+   secs := RealSecs;
+   if secs < calSecs0 then begin               { the year rolled over: start again }
+      calSecs0 := secs;
+      calTime0 := Time
+   end
+   else if secs - calSecs0 >= 10 then begin
+      unitsPerSec := (Time - calTime0) div (secs - calSecs0);
+      if unitsPerSec < 20 then unitsPerSec := 20;
+      if unitsPerSec > 2000 then unitsPerSec := 2000;
+      calTime0 := Time;
+      calSecs0 := secs
+   end
+end;
+
+{ n hundredths of a REAL second, expressed in Window Manager clock units. }
+function ScaleUnits {(n : longint) : longint};
+begin
+   ScaleUnits := (n * unitsPerSec) div 100
 end;
 
 { Fetch a phrase from the phrase file; empty if the number is missing. }

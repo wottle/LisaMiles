@@ -1,0 +1,254 @@
+{ MILES-ICONS.TEXT -- the card pictures, as 1-bit bitmaps stored in hex text.  GENERATED   }
+{ by tools/gen_icons.py from the approved artwork: do not edit by hand; run `make icons`.     }
+{ Portable: tested on the Mac, then drawn on the Lisa with CopyBits.  Each icon is rows of    }
+{ three 16-bit words, one bit per pixel, 1 = black, leftmost pixel in the top bit (a          }
+{ QuickDraw bitmap with a 6-byte row).                                                        }
+unit MilesIcons;
+
+interface
+
+uses (*$U MILES/LOGIC.OBJ *) MilesLogic;
+
+const
+  NumIcons    = 15;
+  IconW       = 36;
+  IconH       = 24;       { rows of a card icon }
+  RoadH       = 12;       { rows of the road icon used on distance cards }
+  IconRowBytes = 6;       { 3 words per row }
+  IconWords   = 72;       { words in the largest icon }
+
+type
+  IconBuf = array[0..71] of integer;
+  HexChunk = string[72];
+
+function  IconOf(k: CardKind): integer;
+function  IconRows(icon: integer): integer;
+procedure LoadIcon(icon: integer; var w: IconBuf);
+function  IconBits(icon: integer): integer;
+
+implementation
+
+{ Which icon a card shows: 1 accident, 2 out of gas, 3 flat, 4 limit, 5 stop, 6 repairs, 7 gas,  }
+{ 8 spare, 9 end of limit, 10 go, 11 ace, 12 tank, 13 tough tires, 14 right of way, 15 the road.  }
+function IconOf(k: CardKind): integer;
+begin
+  IconOf := 0;
+  if IsDistance(k) then IconOf := 15;
+  if k = hzAccident then IconOf := 1;
+  if k = hzOutOfGas then IconOf := 2;
+  if k = hzFlat then IconOf := 3;
+  if k = hzLimit then IconOf := 4;
+  if k = hzStop then IconOf := 5;
+  if k = rmRepairs then IconOf := 6;
+  if k = rmGas then IconOf := 7;
+  if k = rmSpare then IconOf := 8;
+  if k = rmEndLimit then IconOf := 9;
+  if k = rmGo then IconOf := 10;
+  if k = sfAce then IconOf := 11;
+  if k = sfTank then IconOf := 12;
+  if k = sfPunct then IconOf := 13;
+  if k = sfRoW then IconOf := 14
+end;
+
+const
+  hx01a = '000000000000000000080000000000CC80000000007F80000000007F8000000001FFE000';
+  hx01b = '0000007F0000001FF87F8000003FFC8C0000007FFE08000000FFFE00000001FFFF000000';
+  hx01c = '1FFFFFC000007FFFFFE000007FFFFFF000007FFFFFF000007E3FE1F0000039EFDEE00000';
+  hx01d = '03E03F00000003E03E00000000C00C000000000000000000000000000000000000000000';
+  hx02a = '00000000000000000000000007FFF000000007FFF000000007FFF000000007FFF0000000';
+  hx02b = '07FFFFE0000007FFFFF8000007FFF838000007FFF0380000070070380000070070380000';
+  hx02c = '070070380000070070380000070070380000070070380000070070700000070070E00000';
+  hx02d = '07007040000007007000000007FFF00000003FFFFE0000003FFFFE0000001FFFFE000000';
+  hx03a = '0000000000000001F8000000001FFF800000007FFFE0000000FE07F8000003F000FC0000';
+  hx03b = '03E0007E000007C0003E00000F80001F00000F80F01F00000F01F80F00000F80F00F0000';
+  hx03c = '0F80001F000007C0001E000007C0003E000003F000FC000001FE03F80000007FFFE00000';
+  hx03d = '3FFFFFFFE0007FFFFFFFE000000000000000000000000000000000000000000000000000';
+  hx04a = '0000000000000007FE000000003FFFC0000000FFFFF0000003F000FC000007C0003E0000';
+  hx04b = '0F00000F00001E00000780001C000003C0003C3F8FC3C00038381C61C00038381871C000';
+  hx04c = '381F9871C00038019871C0003C019C63C0001C3B8FE3C0001E1E078780000F00000F0000';
+  hx04d = '07C0003E000003F000FC000000FF9FF80000003FFFC000000007FE000000000000000000';
+  hx05a = '000000000000001FFF800000003FFFC0000000FFFFF0000001FFFFF8000007FFFFFE0000';
+  hx05b = '0FFFFFFF00003FFFFFFFC0003FFFFFFFC0003FFFFFFFC0003C000003C0003C000003C000';
+  hx05c = '3C000003C0003C000003C0003FFFFFFFC0003FFFFFFFC0003FFFFFFFC0000FFFFFFF0000';
+  hx05d = '07FFFFFE000001FFFFF8000000FFFFF00000003FFFC00000001FFF800000000000000000';
+  hx06a = '00000000000000000000000000001FC0000000007FC000000000FF0000000000FE000000';
+  hx06b = '0001F80100000001F80380000000F80F80000000FE1F80000000FFFF80000001FFFF0000';
+  hx06c = '0007FFFE0000000FF3F80000003FC000000007FF800000000FFE000000000E3C00000000';
+  hx06d = '0E1C0000000007FC0000000003F800000000000000000000000000000000000000000000';
+  hx07a = '000000000000000000000000000007FC0000000007FE0000003F87FC0000003FC7800000';
+  hx07b = '003FC780000001FFFFC0000003FFFFE0000003FFFFE0000003E003E0000003F80FE00000';
+  hx07c = '03DC1CE0000003C638E0000003C3E0E0000003C1C0E0000003C3F0E0000003CE38E00000';
+  hx07d = '03DC1CE0000003F007E0000003F007E0000003FFFFE0000003FFFFE00000000000000000';
+  hx08a = '0000000000000001F8000000001FFF80000000FFFFF0000001FFFFFC000007FE07FE0000';
+  hx08b = '0FF000FF00000FF801FF80001F9801DF80003F00F00FC0003F01FC0FC0003F03FC0FC000';
+  hx08c = '3F03FC0FC0003F03FC0FC0003F00F00FC0001F98019F80000FF801FF80000FF000FF0000';
+  hx08d = '07FE07FE000001FFFFFC000000FFFFF00000003FFFC000000003FC000000000000000000';
+  hx09a = '0000000000000007FE000000003FFFC0000000FFFFE4000003F0009E000007C0003C0000';
+  hx09b = '0F0000FB00001E0001E780001C0007C3C0003C3F8F03C00038383E61C00038387871C000';
+  hx09c = '3819F071C0003803C871C0003C0F9C63C0001C1E0FE3C0001E7C078780000CF0000F0000';
+  hx09d = '03E0003E0000079000FC0000037F9FF80000003FFFC000000007FE000000000000000000';
+  hx10a = '0007FE000000000FFF000000001C03800000001CF3800000001D9B800000001D0F800000';
+  hx10b = '001DFB800000001C63800000001C03800000001C03800000001DFB800000001D9B800000';
+  hx10c = '001D8B800000001DFB800000001C03800000001C03800000001CF3800000001DFB800000';
+  hx10d = '001FFF800000001FFF800000001DFB800000001C03800000000FFF0000000007FE000000';
+  hx11a = '0000000000000000200000000000600000000000F00000000000F00000000001F8000000';
+  hx11b = '0001F80000000003FC0000000003FE0000007FFFFFFFE0001FFFFFFF800007FFFFFE0000';
+  hx11c = '01FFFFF8000000FFFFF00000003FFFC00000003FFFC00000003FFFC00000007FFFE00000';
+  hx11d = '007F9FE00000007E07F0000000F801F0000000E000700000000000080000000000000000';
+  hx12a = '000000000000000000000000000000000000000000000000000000000000000000000000';
+  hx12b = '03FFFF8000000FFFFFE000003E0001F000003803807800007807803FE000781FE03FE000';
+  hx12c = '781FF03FE000781FE03FE0007807803FE0003803807800003E0001F000000FFFFFE00000';
+  hx12d = '03FFFF800000000000000000000000000000000000000000000000000000000000000000';
+  hx13a = '0000000000000FFFFFFF00001FFFFFFF80001FFFFFFF80001E00000780001E03FC078000';
+  hx13b = '1E0FFF0780001E1E078780001E1C038780001E1C038780001E1C038780001E1E07878000';
+  hx13c = '0F0FFF0F000007C7FE1E000003E0F07C000000F000F00000007801E00000003E03C00000';
+  hx13d = '000F0F00000000079E0000000003FC0000000001F8000000000060000000000000000000';
+  hx14a = '0000000000000000F00000000001F80000000007FE000000000F0F000000003E27C00000';
+  hx14b = '0078F1E0000001F1F8F8000003C3FC3C00000F8FFF1F00001E1FFF8780007C3FFFC3E000';
+  hx14c = '7C00F003E0001E00F00780000F80F01F000003C0F03C000001F0F0F800000078F1E00000';
+  hx14d = '003EF7C00000000F0F0000000007FE0000000001F80000000000F0000000000000000000';
+  hx15a = '00039C0000000007FE000000000F6F000000001E07800000003CF3C000000078F1E00000';
+  hx15b = '00F000F0000001E06078000003C0F03C00000780F01E00000F00F00F00000E0000070000';
+
+function IconRows(icon: integer): integer;
+begin
+  if icon = NumIcons then IconRows := RoadH
+  else IconRows := IconH
+end;
+
+function HexVal(c: char): integer;
+begin
+  HexVal := 0;
+  if (c >= '0') and (c <= '9') then HexVal := ord(c) - ord('0');
+  if (c >= 'A') and (c <= 'F') then HexVal := ord(c) - ord('A') + 10
+end;
+
+{ Decode up to 18 words of hex text into w, starting at word index at. }
+procedure DecodeChunk(s: HexChunk; at: integer; var w: IconBuf);
+var i, j: integer; v: longint;
+begin
+  for i := 0 to (length(s) div 4) - 1 do begin
+    v := 0;
+    for j := 1 to 4 do
+      v := v * 16 + HexVal(s[i * 4 + j]);
+    if v >= 32768 then v := v - 65536;
+    w[at + i] := v
+  end
+end;
+
+procedure LoadIcon(icon: integer; var w: IconBuf);
+var i: integer;
+begin
+  for i := 0 to IconWords - 1 do w[i] := 0;
+  if icon = 1 then begin
+    DecodeChunk(hx01a, 0, w);
+    DecodeChunk(hx01b, 18, w);
+    DecodeChunk(hx01c, 36, w);
+    DecodeChunk(hx01d, 54, w)
+  end
+  else if icon = 2 then begin
+    DecodeChunk(hx02a, 0, w);
+    DecodeChunk(hx02b, 18, w);
+    DecodeChunk(hx02c, 36, w);
+    DecodeChunk(hx02d, 54, w)
+  end
+  else if icon = 3 then begin
+    DecodeChunk(hx03a, 0, w);
+    DecodeChunk(hx03b, 18, w);
+    DecodeChunk(hx03c, 36, w);
+    DecodeChunk(hx03d, 54, w)
+  end
+  else if icon = 4 then begin
+    DecodeChunk(hx04a, 0, w);
+    DecodeChunk(hx04b, 18, w);
+    DecodeChunk(hx04c, 36, w);
+    DecodeChunk(hx04d, 54, w)
+  end
+  else if icon = 5 then begin
+    DecodeChunk(hx05a, 0, w);
+    DecodeChunk(hx05b, 18, w);
+    DecodeChunk(hx05c, 36, w);
+    DecodeChunk(hx05d, 54, w)
+  end
+  else if icon = 6 then begin
+    DecodeChunk(hx06a, 0, w);
+    DecodeChunk(hx06b, 18, w);
+    DecodeChunk(hx06c, 36, w);
+    DecodeChunk(hx06d, 54, w)
+  end
+  else if icon = 7 then begin
+    DecodeChunk(hx07a, 0, w);
+    DecodeChunk(hx07b, 18, w);
+    DecodeChunk(hx07c, 36, w);
+    DecodeChunk(hx07d, 54, w)
+  end
+  else if icon = 8 then begin
+    DecodeChunk(hx08a, 0, w);
+    DecodeChunk(hx08b, 18, w);
+    DecodeChunk(hx08c, 36, w);
+    DecodeChunk(hx08d, 54, w)
+  end
+  else if icon = 9 then begin
+    DecodeChunk(hx09a, 0, w);
+    DecodeChunk(hx09b, 18, w);
+    DecodeChunk(hx09c, 36, w);
+    DecodeChunk(hx09d, 54, w)
+  end
+  else if icon = 10 then begin
+    DecodeChunk(hx10a, 0, w);
+    DecodeChunk(hx10b, 18, w);
+    DecodeChunk(hx10c, 36, w);
+    DecodeChunk(hx10d, 54, w)
+  end
+  else if icon = 11 then begin
+    DecodeChunk(hx11a, 0, w);
+    DecodeChunk(hx11b, 18, w);
+    DecodeChunk(hx11c, 36, w);
+    DecodeChunk(hx11d, 54, w)
+  end
+  else if icon = 12 then begin
+    DecodeChunk(hx12a, 0, w);
+    DecodeChunk(hx12b, 18, w);
+    DecodeChunk(hx12c, 36, w);
+    DecodeChunk(hx12d, 54, w)
+  end
+  else if icon = 13 then begin
+    DecodeChunk(hx13a, 0, w);
+    DecodeChunk(hx13b, 18, w);
+    DecodeChunk(hx13c, 36, w);
+    DecodeChunk(hx13d, 54, w)
+  end
+  else if icon = 14 then begin
+    DecodeChunk(hx14a, 0, w);
+    DecodeChunk(hx14b, 18, w);
+    DecodeChunk(hx14c, 36, w);
+    DecodeChunk(hx14d, 54, w)
+  end
+  else if icon = 15 then begin
+    DecodeChunk(hx15a, 0, w);
+    DecodeChunk(hx15b, 18, w)
+  end
+end;
+
+{ Black pixels the generator drew in each icon: lets the tests prove the decoding is exact. }
+function IconBits(icon: integer): integer;
+begin
+  IconBits := 0;
+  if icon = 1 then IconBits := 289;
+  if icon = 2 then IconBits := 305;
+  if icon = 3 then IconBits := 278;
+  if icon = 4 then IconBits := 296;
+  if icon = 5 then IconBits := 476;
+  if icon = 6 then IconBits := 197;
+  if icon = 7 then IconBits := 296;
+  if icon = 8 then IconBits := 384;
+  if icon = 9 then IconBits := 312;
+  if icon = 10 then IconBits := 234;
+  if icon = 11 then IconBits := 284;
+  if icon = 12 then IconBits := 222;
+  if icon = 13 then IconBits := 316;
+  if icon = 14 then IconBits := 273;
+  if icon = 15 then IconBits := 118
+end;
+
+end.

@@ -26,6 +26,7 @@ uses (*$U UnitStd.obj *)        UnitStd,
      (*$U WMlCrs.obj *)         WMLCrs,
      (*$U FilerComm.obj *)      FilerComm,
      (*$U MILES/LOGIC.OBJ *)    MilesLogic,
+     (*$U MILES/ICONS.OBJ *)    MilesIcons,
      (*$U MILES/LAYOUT.OBJ *)   MilesLayout,
      (*$U MILES/CTRL.OBJ *)     MilesCtrl,
      (*$U MILES/GLOBALS.OBJ *)  MilesGlobals;
@@ -46,13 +47,31 @@ const
    statusTextY = 291;
 
 var
+   iconData  : array [1..15, 0..71] of integer;   { the card pictures, as QuickDraw bitmaps }
+   contentR  : Rect;        { the whole content area: the clip restored after each card }
+   shownUnits: longint;     { TEMPORARY: clock speed as last shown in the status line }
    shownG    : Game;        { the game state as last painted }
    shownU    : UIState;     { the UI state as last painted }
    haveShown : boolean;     { false until the first full paint }
 
+{ Unpack every icon into its bitmap array. }
+procedure FillIcons;
+var i, j : integer;
+    buf  : IconBuf;
+begin
+   for i := 1 to NumIcons do begin
+      LoadIcon(i, buf);
+      for j := 0 to IconWords - 1 do
+         iconData[i, j] := buf[j]
+   end
+end;
+
 procedure InitDraw {};
 begin
-   haveShown := false
+   haveShown := false;
+   shownUnits := 0;
+   SetRect(contentR, 0, 0, ContentW, ContentH);
+   FillIcons
 end;
 
 procedure BoxToRect (var b : Box; var r : Rect);
@@ -96,29 +115,45 @@ begin
    InvertRect(inner)
 end;
 
+{ Copy an icon bitmap onto the window at (left, top). }
+procedure ShowIcon (icon, left, top : integer);
+var src : BitMap;
+    dst : Rect;
+begin
+   if icon = 0 then exit(ShowIcon);
+   src.baseAddr := @iconData[icon, 0];
+   src.rowBytes := IconRowBytes;
+   SetRect(src.bounds, 0, 0, IconW, IconRows(icon));
+   SetRect(dst, left, top, left + IconW, top + IconRows(icon));
+   CopyBits(src, thePort^.portBits, src.bounds, dst, srcCopy, nil)
+end;
+
+{ A card face.  Everything drawn for the card is clipped to its own rectangle, so nothing can  }
+{ spill onto a neighbour or be left behind when the card is redrawn; a caption is drawn only    }
+{ if it fits inside the card.                                                                   }
 procedure ShowFace (k : CardKind; var r : Rect);
 var s     : Str255;
     fi    : FontInfo;
     inner : Rect;
     band  : Rect;
-    mid   : integer;
+    room  : integer;
 begin
    PenNormal;
    EraseRect(r);
+   ClipRect(r);
    TextMode(srcOr);
    TextFace([]);
+   room := (r.right - r.left) - 8;
    if IsDistance(k) then begin
       FrameRect(r);
       TextFont(fntBig);
       GetFontInfo(fi);
       NumToStr(DistValue(k), s);
-      CenterString(r, r.top + 6 + fi.ascent, s);
-      TextFont(fntCaption);
-      GetFontInfo(fi);
-      s := capText[k];
-      CenterString(r, r.bottom - 6 - fi.descent, s)
+      CenterString(r, r.top + 5 + fi.ascent, s);
+      ShowIcon(IconOf(k), r.left + 9, r.bottom - 17)        { the road, under the number }
    end
    else begin
+      ShowIcon(IconOf(k), r.left + 9, r.top + 4);
       TextFont(fntCaption);
       GetFontInfo(fi);
       s := capText[k];
@@ -126,10 +161,13 @@ begin
          PenSize(2, 2);
          FrameRect(r);
          PenNormal;
-         SetRect(band, r.left + 2, r.bottom - 14, r.right - 2, r.bottom - 2);
+         SetRect(band, r.left + 2, r.bottom - 15, r.right - 2, r.bottom - 2);
          PaintRect(band);
-         mid := r.top + (CardH - 14 + fi.ascent - fi.descent) div 2;
-         CenterString(r, mid, s)
+         if StringWidth(s) <= room then begin
+            TextMode(srcBic);                              { white text on the black band }
+            CenterString(r, band.bottom - 2 - fi.descent, s);
+            TextMode(srcOr)
+         end
       end
       else begin
          FrameRect(r);
@@ -138,12 +176,13 @@ begin
             InsetRect(inner, 3, 3);
             FrameRect(inner)
          end;
-         mid := r.top + (CardH + fi.ascent - fi.descent) div 2;
-         CenterString(r, mid, s);
+         if StringWidth(s) <= room then
+            CenterString(r, r.bottom - 5 - fi.descent, s);
          if IsHazard(k) then
-            InvertRect(r)              { hazards are black cards with white text }
+            InvertRect(r)                                  { hazards are black cards }
       end
-   end
+   end;
+   ClipRect(contentR)
 end;
 
 { The miles-travelled box: a framed number. }
@@ -369,7 +408,15 @@ begin
    TextMode(srcOr);
    TextFace([]);
    MoveTo(8, statusTextY);
-   DrawString(s)
+   DrawString(s);
+   { TEMPORARY DIAGNOSTIC: measured clock speed (100 = stock) and the double-click window in clock units }
+   NumToStr(unitsPerSec, s);
+   t := concat('clk=', s);
+   NumToStr(ScaleUnits(clickDelay), s);
+   t := concat(t, ' dbl=', s);
+   MoveTo(500, statusTextY);
+   DrawString(t);
+   shownUnits := unitsPerSec
 end;
 
 procedure Remember;
@@ -453,7 +500,7 @@ begin
    if RemainingDeck(shownG) <> RemainingDeck(theGame) then ShowPile;
    if shownG.discardTop <> theGame.discardTop then DrawDiscardArea;
    if (shownU.match[0] <> ui.match[0]) or (shownU.match[1] <> ui.match[1]) then DrawScores;
-   wasBtn := (shownG.ph = phOver) and (not shownU.gameOver);   { was / is the Next Match button showing? }
+   wasBtn := (shownG.ph = phOver) and (not shownU.gameOver);     { was / is Next Match showing? }
    isBtn := (theGame.ph = phOver) and (not ui.gameOver);
    if (wasBtn and (not isBtn)) or ((not wasBtn) and isBtn) then DrawNextButton;
 
@@ -462,7 +509,8 @@ begin
       if shownG.pl[0].hand[i] <> theGame.pl[0].hand[i] then handChanged := true;
    if handChanged then DrawHandStrip;
 
-   if (StatusMsg(shownU, shownG) <> StatusMsg(ui, theGame)) or (shownU.lastCard <> ui.lastCard) then
+   if (StatusMsg(shownU, shownG) <> StatusMsg(ui, theGame)) or (shownU.lastCard <> ui.lastCard) or
+      (shownUnits <> unitsPerSec) then
       DrawStatusText;
 
    Remember

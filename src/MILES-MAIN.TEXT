@@ -20,6 +20,7 @@ uses (*$U UnitStd.obj *)        UnitStd,
      (*$U WMlCrs.obj *)         WMLCrs,
      (*$U FilerComm.obj *)      FilerComm,
      (*$U MILES/LOGIC.OBJ *)    MilesLogic,
+     (*$U MILES/ICONS.OBJ *)    MilesIcons,
      (*$U MILES/LAYOUT.OBJ *)   MilesLayout,
      (*$U MILES/CTRL.OBJ *)     MilesCtrl,
      (*$U MILES/GLOBALS.OBJ *)  MilesGlobals,
@@ -143,7 +144,7 @@ begin
    if ev = ueCoupPrompt then AskCoup
    else if ev = ueExtendPrompt then AskExtend
    else if ev = ueHandOver then ShowHandResult;
-   nextAi := Time + aiDelay
+   nextAi := Time + ScaleUnits(aiDelay)
 end;
 
 { New Game: forget every score and deal a fresh match.  Ask first if that throws anything away. }
@@ -155,7 +156,7 @@ begin
             exit(StartGame);
    UINewGame(ui, theGame, Time);
    haveGame := true;
-   nextAi := Time + aiDelay;
+   nextAi := Time + ScaleUnits(aiDelay);
    Repaint
 end;
 
@@ -164,9 +165,10 @@ var ev : UIEvent;
 begin
    if myWindow = nil then exit(DoWindowClick);
    SetPort(myWindow);
-   { theEvent.when and clickDelay share one clock (hundredths of a second): that is how a double  }
-   { click is spotted.                                                                           }
-   UIClick(ui, theGame, theEvent.where.h, theEvent.where.v, theEvent.when, clickDelay, ev);
+   { theEvent.when and clickDelay share the Window Manager clock, which runs on the CPU clock: on an  }
+   { overclocked Lisa it ticks faster than real hundredths, so ScaleUnits converts the double-click    }
+   { interval to real time.                                                                            }
+   UIClick(ui, theGame, theEvent.where.h, theEvent.where.v, theEvent.when, ScaleUnits(clickDelay), ev);
    AfterEvent(ev)
 end;
 
@@ -224,7 +226,7 @@ begin
       UINewGame(ui, theGame, Time);
       haveGame := true
    end;
-   nextAi := Time + aiDelay;
+   nextAi := Time + ScaleUnits(aiDelay);
    FolderSize(myWindow, ContentW, ContentH, false);
    SetPort(myWindow);
    ValidRect(myWindow^.portRect);
@@ -338,6 +340,7 @@ begin
    nextAi    := 0;
    UIInit(ui);
    InitDraw;
+   InitClockCal;
 
    { (3) The private heap, carved out of the static myZone array. }
    InitHeap(@myZone[0], @myZone[maxHeap], @OutOfHeapSpace);
@@ -404,6 +407,7 @@ begin
             ProcessTheEvent
          end
          else begin
+            CalibrateClock;
             DoComputerStep;
             LetOthersRun         { NEVER omitted: the scheduler is cooperative }
          end
