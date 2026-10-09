@@ -38,6 +38,7 @@ Order matters: `LOGIC`, `LAYOUT`, `CTRL`, `GLOBALS`, `DRAW`, `MAIN`.
 - A function result must be scalar, subrange or pointer (error 118): never a string or record.
 - A `{ }` comment ends at the first `}`: never put a brace inside a comment.
 - A unit that uses another unit must list, before it, every unit named in that unit's interface.
+- Identifiers must differ within their FIRST 8 CHARACTERS (case-insensitive): Lisa Pascal reports "identifier declared twice" for `MsgComputerTurn` / `MsgComputerCoup` and would for `DrawCard` / `DrawCardFace`. `make lint` checks this across every unit together.
 - Booleans are not short-circuited: guard array indexes with nested `if`, never with `and`.
 - Alert/phrase numbers must ascend; comments occupy their own line; blank lines are structural.
 

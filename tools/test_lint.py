@@ -3,7 +3,7 @@ import sys
 import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from lint_lisa_subset import find_problems
+from lint_lisa_subset import find_problems, find_collisions
 
 
 class LintTests(unittest.TestCase):
@@ -60,6 +60,20 @@ class LintTests(unittest.TestCase):
         self.assertEqual(self.kinds(ok, lisa_only=True), [])
         self.assertTrue(self.kinds("function F: Str255;\n", lisa_only=True))
         self.assertTrue(self.kinds("x := 1; { café }\n", lisa_only=True))
+
+    def test_identifiers_must_differ_within_the_first_eight_characters(self):
+        # Lisa Pascal reported "identifier declared twice" for MsgComputerTurn / MsgComputerCoup.
+        texts = {"a.TEXT": "const MsgComputerTurn = 22;\n       MsgComputerCoup = 23;\n"}
+        probs = find_collisions(texts)
+        self.assertEqual(len(probs), 1)
+        self.assertIn("MsgComputerTurn", probs[0])
+        self.assertIn("MsgComputerCoup", probs[0])
+
+    def test_collisions_are_found_across_files_and_ignore_comments_strings_and_case(self):
+        texts = {"a.TEXT": "procedure DrawCard;\n", "b.TEXT": "procedure DrawCardFace;\n"}
+        self.assertEqual(len(find_collisions(texts)), 1)
+        self.assertEqual(find_collisions({"a.TEXT": "x := DrawCard; y := drawcard; { DrawCardFace }\n s := 'DrawCardBack';\n"}), [])
+        self.assertEqual(find_collisions({"a.TEXT": "var HandN, HandBox: integer;\n"}), [])
 
     def test_non_ascii_flagged(self):
         self.assertTrue(self.kinds("x := 1; { café }\n"))

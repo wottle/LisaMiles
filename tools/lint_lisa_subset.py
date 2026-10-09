@@ -90,8 +90,43 @@ def find_problems(text, lisa_only=False):
     return sorted(set(problems))
 
 
+SIGNIFICANT = 8        # Lisa Pascal treats identifiers that agree in their first 8 characters as the same
+
+
+def strip_comments_and_strings(text):
+    code = re.sub(r"\(\*.*?\*\)", blank, text, flags=re.S)
+    code = re.sub(r"\{.*?\}", blank, code, flags=re.S)
+    return re.sub(r"'[^'\n]*'", blank, code)
+
+
+def find_collisions(texts):
+    """texts: {path: source}.  Returns one message per group of different identifiers (across ALL the
+    files together, case-insensitive) that share their first SIGNIFICANT characters."""
+    groups = {}
+    for path, text in texts.items():
+        for name in re.findall(r"[A-Za-z][A-Za-z0-9_]*", strip_comments_and_strings(text)):
+            if len(name) >= SIGNIFICANT:
+                groups.setdefault(name[:SIGNIFICANT].lower(), {}).setdefault(name.lower(), (name, path))
+    problems = []
+    for prefix, names in sorted(groups.items()):
+        if len(names) > 1:
+            listing = ", ".join("%s (%s)" % (n, p) for n, p in sorted(names.values()))
+            problems.append("identifiers collide in their first %d characters: %s" % (SIGNIFICANT, listing))
+    return problems
+
+
 def main(argv):
     args = argv[1:]
+    if "--collisions" in args:
+        paths = [a for a in args if not a.startswith("--")]
+        texts = {}
+        for path in paths:
+            with open(path, encoding="utf-8") as handle:
+                texts[path] = handle.read()
+        problems = find_collisions(texts)
+        for message in problems:
+            print(message)
+        return 1 if problems else 0
     lisa_only = "--lisa-only" in args
     paths = [a for a in args if not a.startswith("--")] or ["src/MILES-LOGIC.TEXT"]
     bad = 0

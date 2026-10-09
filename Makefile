@@ -43,6 +43,7 @@ lint:
 	python3 tools/test_lint.py
 	python3 tools/lint_lisa_subset.py $(PORTABLE)
 	python3 tools/lint_lisa_subset.py --lisa-only $(LISAONLY)
+	python3 tools/lint_lisa_subset.py --collisions $(PORTABLE) $(LISAONLY)
 
 clean:
 	rm -rf build

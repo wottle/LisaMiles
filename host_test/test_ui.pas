@@ -295,7 +295,7 @@ begin
   ClickHand(1, ev);
   ClickSlot(1, SlotBattle, ev);
   Check(g.pl[1].safe[0], 'coup: the computer plays its ace at once');
-  CheckEq(u.msg, MsgComputerCoup, 'coup: and the status says so');
+  CheckEq(u.msg, MsgCpuCoup, 'coup: and the status says so');
   CheckEq(g.turn, 1, 'coup: the computer takes the next turn')
 end;
 

@@ -14,7 +14,7 @@ const
   MsgYourDraw     = 20;
   MsgYourPlay     = 21;
   MsgComputerTurn = 22;
-  MsgComputerCoup = 23;
+  MsgCpuCoup = 23;
   MsgHandOver     = 24;
   MsgCoupAsk      = 25;
   MsgAlreadyDrew  = 26;
@@ -129,7 +129,7 @@ begin
           ev := ueMoved;
           if g.ph = phCoup then begin       { the computer is the victim: it always answers }
             ResolveCoup(g, true);
-            u.msg := MsgComputerCoup
+            u.msg := MsgCpuCoup
           end;
           Finish(u, g, ev)
         end
@@ -154,7 +154,7 @@ begin
     end
     else begin
       ResolveCoup(g, true);
-      u.msg := MsgComputerCoup;
+      u.msg := MsgCpuCoup;
       ev := ueMoved;
       Finish(u, g, ev)
     end
