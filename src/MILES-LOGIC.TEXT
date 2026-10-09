@@ -520,7 +520,7 @@ begin
   end
 end;
 
-{ The player at 700 miles chose: extend to 1000 (the match goes on) or stop (the trip is complete at 700). }
+{ The player at 700 miles chose: extend to 1000 (play goes on) or stop (the trip is complete at 700). }
 procedure ResolveExtension(var g: Game; extend: boolean);
 var s: integer;
 begin

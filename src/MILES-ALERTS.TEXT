@@ -69,6 +69,17 @@ Nobody finished the trip.^L^L
 Match score:  you ^1, computer ^2.^L
 Your total score:  ^3.
 
+; -- Game results (a total reached 5000).  ^1 = your total, ^2 = the computer's.
+33 note alert
+You win the game!^L^L
+Final score:  you ^1, computer ^2.^L
+Choose New Game to play again.
+
+34 note alert
+The computer wins the game.^L^L
+Final score:  you ^1, computer ^2.^L
+Choose New Game to play again.
+
 40 note alert
 How to play 1000 Miles^L^L
 Be first to travel exactly 1000 miles.  On your turn, click the draw pile, then
@@ -78,8 +89,16 @@ card away.  Or just double-click a card to play it where it belongs.^L^L
 You need a Go card to start, and a remedy for every hazard.  Safety cards
 protect you for good, and playing one gives you another turn.  Only two
 200-mile cards per match.^L^L
-When the draw pile runs out, a player with no card to play is skipped, and
-the match ends when neither player can play.
+Land on exactly 700 miles and you may stop there, or extend to 1000 for a 200
+point bonus.  When the draw pile runs out, a player with no card to play is
+skipped, and the match ends when neither can play.  The first player whose
+score reaches 5000 wins the game.
+
+; -- Extend or stop at exactly 700 miles: OK extends, Cancel stops here.
+50 caution ok alert
+You have gone exactly 700 miles!^L^L
+OK extends the trip to 1000 miles, with a 200 point bonus if you make it.^L
+Cancel stops here: the trip is complete and the match ends.
 
 ; ==== PHRASES (number-only headers, one text line each, each ends with a blank line)
 ; -- 911..922: status text for the Err codes of MILES-LOGIC (910 + code).
@@ -150,6 +169,13 @@ The computer attacked you with:
 
 939
 The computer discarded:
+
+; -- 940..941: more messages about what just happened.
+940
+The computer reached 700 miles and is going on to 1000!
+
+941
+The game is over.  Choose New Game from the Game menu.
 
 ; -- 971..989: card captions (970 + the card's position in MilesLogic.CardKind).
 ;    Keep them short: they must fit inside a 54-pixel-wide card.

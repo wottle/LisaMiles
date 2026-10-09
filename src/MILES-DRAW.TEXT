@@ -320,7 +320,7 @@ begin
    BoxToRect(b, r);
    PenNormal;
    EraseRect(r);
-   if theGame.ph = phOver then begin
+   if (theGame.ph = phOver) and (not ui.gameOver) then begin
       PenSize(2, 2);
       FrameRect(r);
       PenNormal;
@@ -414,6 +414,7 @@ var all         : Rect;
     tOld, tNew  : integer;
     changed     : boolean;
     handChanged : boolean;
+    wasBtn, isBtn : boolean;
 begin
    if window = nil then exit(RefreshContents);
    if not haveShown then begin
@@ -452,8 +453,9 @@ begin
    if RemainingDeck(shownG) <> RemainingDeck(theGame) then ShowPile;
    if shownG.discardTop <> theGame.discardTop then DrawDiscardArea;
    if (shownU.match[0] <> ui.match[0]) or (shownU.match[1] <> ui.match[1]) then DrawScores;
-   if ((shownG.ph = phOver) and (theGame.ph <> phOver)) or
-      ((shownG.ph <> phOver) and (theGame.ph = phOver)) then DrawNextButton;
+   wasBtn := (shownG.ph = phOver) and (not shownU.gameOver);   { was / is the Next Match button showing? }
+   isBtn := (theGame.ph = phOver) and (not ui.gameOver);
+   if (wasBtn and (not isBtn)) or ((not wasBtn) and isBtn) then DrawNextButton;
 
    handChanged := (shownG.pl[0].handN <> theGame.pl[0].handN) or (shownU.sel <> ui.sel);
    for i := 1 to theGame.pl[0].handN do

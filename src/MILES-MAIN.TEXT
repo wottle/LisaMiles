@@ -96,7 +96,14 @@ begin
    ParamAlert(s1, s2, s3);
    if theGame.tripBy = 0 then NoteAlert(allAlerts, alrtYouWin)
    else if theGame.tripBy = 1 then NoteAlert(allAlerts, alrtCompWin)
-   else NoteAlert(allAlerts, alrtNoWinner)
+   else NoteAlert(allAlerts, alrtNoWinner);
+   if ui.gameOver then begin            { a total reached 5000: the whole game is decided }
+      NumToStr(ui.match[0], s1);
+      NumToStr(ui.match[1], s2);
+      ParamAlert(s1, s2, '');
+      if ui.winner = 0 then NoteAlert(allAlerts, alrtGmYou)
+      else NoteAlert(allAlerts, alrtGmCpu)
+   end
 end;
 
 { The computer attacked while we hold the matching safety: ask whether to play it. }
@@ -117,11 +124,24 @@ begin
    if ev = ueHandOver then ShowHandResult
 end;
 
+{ At exactly 700 miles: extend to 1000 (OK) or stop here (Cancel). }
+procedure AskExtend;
+var ev : UIEvent;
+begin
+   if CautionAlert(allAlerts, alrtExtend) then
+      UIExtendAnswer(ui, theGame, true, ev)
+   else
+      UIExtendAnswer(ui, theGame, false, ev);
+   Repaint;
+   if ev = ueHandOver then ShowHandResult
+end;
+
 { Everything that follows a click or a computer move: repaint, then any prompt. }
 procedure AfterEvent (ev : UIEvent);
 begin
    if ev <> ueNone then Repaint;
    if ev = ueCoupPrompt then AskCoup
+   else if ev = ueExtendPrompt then AskExtend
    else if ev = ueHandOver then ShowHandResult;
    nextAi := Time + aiDelay
 end;

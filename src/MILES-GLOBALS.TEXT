@@ -48,6 +48,9 @@ const
    alrtYouWin    = 30;
    alrtCompWin   = 31;
    alrtNoWinner  = 32;
+   alrtGmYou     = 33;       { the game was won by you }
+   alrtGmCpu     = 34;       { ... by the computer }
+   alrtExtend    = 50;
    alrtRules     = 40;
 
    phStatusBase  = 910;     { status text = 910 + a status code (an Err or Msg code) }
