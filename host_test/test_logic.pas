@@ -347,8 +347,18 @@ begin
   DoPlay(g, 1, tgOpponent, err);
   ResolveCoup(g, true);
   CheckEq(g.pl[1].handN, 0, 'coup with empty pile: no replacement');
-  CheckEq(g.turn, 0, 'coup with empty pile and empty hand: no stuck turn');
-  Check(g.ph = phDraw, 'coup with empty pile: play continues')
+  Check(g.ph = phOver, 'coup with empty pile and nobody able to play: the hand ends');
+
+  { ...but if the attacker can still play, the turn goes to the attacker with no draw }
+  SetupCoup(g, hzAccident, sfAce);
+  g.pl[0].battle := rmGo;
+  g.deckNext := NumCards + 1;
+  g.pl[1].handN := 1;
+  g.pl[1].hand[1] := sfAce;
+  DoPlay(g, 1, tgOpponent, err);
+  ResolveCoup(g, true);
+  CheckEq(g.turn, 0, 'coup with empty pile: the attacker, who can play, goes next');
+  Check(g.ph = phPlay, 'coup with empty pile: ...straight into play')
 end;
 
 procedure TestWin;
@@ -382,16 +392,92 @@ begin
   DoPlay(g, 1, tgDiscard, err);
   Check(g.ph = phOver, 'both hands empty ends the hand');
 
+  { empty pile and nobody can make a real play (no Go yet): the hand ends, nobody has to discard }
   FreshPlay(g);
   g.deckNext := NumCards + 1;
-  g.pl[0].handN := 2; g.pl[0].hand[1] := ck25; g.pl[0].hand[2] := ck25;
-  g.pl[1].handN := 0;
+  SetHand(g, 0, ck25, ck25, ck50, ck50, ck75, ck75);
+  SetHand(g, 1, ck25, ck25, ck50, ck50, ck75, ck75);
   DoPlay(g, 1, tgDiscard, err);
-  CheckEq(g.turn, 0, 'opponent with no cards is skipped');
-  Check(g.ph = phDraw, 'skipped turn continues in draw phase');
+  Check(g.ph = phOver, 'empty pile, nobody can play: the hand ends');
+
+  { empty pile: the next player has nothing playable, so the turn comes straight back with no draw }
+  FreshPlay(g);
+  g.deckNext := NumCards + 1;
+  SetHand(g, 0, ck25, ck25, ck25, ck25, ck25, ck25);
+  g.pl[0].battle := rmGo;
+  SetHand(g, 1, ck25, ck25, ck25, ck25, ck25, ck25);
+  DoPlay(g, 1, tgSelf, err);
+  CheckEq(err, ErrOK, 'empty pile: the 25 is played');
+  CheckEq(g.turn, 0, 'empty pile: a player with nothing playable is skipped');
+  Check(g.ph = phPlay, 'empty pile: no draw click is needed');
+
+  { empty pile: the other player CAN play, so the turn passes straight into the play phase }
+  FreshPlay(g);
+  g.deckNext := NumCards + 1;
+  SetHand(g, 0, ck25, ck25, ck25, ck25, ck25, ck25);
+  g.pl[0].battle := rmGo;
+  SetHand(g, 1, ck25, ck25, ck25, ck25, ck25, ck25);
+  g.pl[1].battle := rmGo;
+  DoPlay(g, 1, tgSelf, err);
+  CheckEq(g.turn, 1, 'empty pile: the turn passes to a player who can play');
+  Check(g.ph = phPlay, 'empty pile: ...directly into the play phase');
+
+  { drawing from an empty pile is still harmless }
+  FreshPlay(g);
+  g.deckNext := NumCards + 1;
+  SetHand(g, 0, ck25, ck25, ck25, ck25, ck25, ck25);
+  g.ph := phDraw;
   DrawCard(g);
   Check(g.ph = phPlay, 'drawing from an empty pile just moves to play');
-  CheckEq(g.pl[0].handN, 1, 'empty pile draws nothing')
+  CheckEq(g.pl[0].handN, 6, 'empty pile draws nothing');
+
+  { safety extra turn with an empty pile: if you cannot play again the turn passes on }
+  FreshPlay(g);
+  g.deckNext := NumCards + 1;
+  SetHand(g, 0, sfAce, ck25, ck25, ck25, ck25, ck25);
+  SetHand(g, 1, ck25, ck25, ck25, ck25, ck25, ck25);
+  g.pl[1].battle := rmGo;
+  DoPlay(g, 1, tgSelf, err);
+  CheckEq(g.turn, 1, 'empty pile: after a safety you cannot play again, so the turn passes');
+  Check(g.ph = phPlay, 'empty pile: ...with no draw')
+end;
+
+procedure TestCanPlayAny;
+begin
+  FreshPlay(g);
+  SetHand(g, 0, ck25, ck25, ck25, ck25, ck25, ck25);
+  Check(not CanPlayAny(g, 0), 'any: miles without a Go are not playable');
+  g.pl[0].battle := rmGo;
+  Check(CanPlayAny(g, 0), 'any: miles with a Go are playable');
+  SetHand(g, 0, hzStop, ck25, ck25, ck25, ck25, ck25);
+  g.pl[0].battle := ckNone;
+  g.pl[1].battle := ckNone;
+  Check(not CanPlayAny(g, 0), 'any: a hazard on an opponent who cannot move is not playable');
+  g.pl[1].battle := rmGo;
+  Check(CanPlayAny(g, 0), 'any: ...but is once the opponent is moving');
+  SetHand(g, 0, sfAce, hzFlat, hzFlat, hzFlat, hzFlat, hzFlat);
+  g.pl[1].battle := ckNone;
+  Check(CanPlayAny(g, 0), 'any: a safety is always playable');
+  g.pl[0].handN := 0;
+  Check(not CanPlayAny(g, 0), 'any: an empty hand has no play')
+end;
+
+procedure TestCuredHazardStaysCured;
+var err: integer;
+begin
+  { a hazard, then its remedy, is a clean cycle: nothing re-applies the hazard }
+  FreshPlay(g);
+  SetHand(g, 0, rmSpare, ck25, ck25, ck25, ck25, ck25);
+  g.pl[0].battle := hzFlat;
+  DoPlay(g, 1, tgSelf, err);
+  CheckEq(err, ErrOK, 'cure: spare fixes the flat');
+  Check(g.pl[0].battle = rmSpare, 'cure: the battle pile now shows the spare');
+  Check(not CanMoveNow(g.pl[0]), 'cure: you still need a Go to move');
+  { the computer cannot attack someone who cannot move }
+  g.turn := 1; g.ph := phPlay;
+  SetHand(g, 1, hzFlat, hzAccident, hzStop, hzOutOfGas, ck25, ck25);
+  CheckEq(CheckPlay(g, 1, tgOpponent), ErrNoEffect, 'cure: no hazard can land on a car that is not moving yet');
+  CheckEq(CheckPlay(g, 2, tgOpponent), ErrNoEffect, 'cure: ...any hazard')
 end;
 
 procedure TestScoring;
@@ -550,6 +636,8 @@ begin
   TestCoup;
   TestWin;
   TestDeckEmpty;
+  TestCanPlayAny;
+  TestCuredHazardStaysCured;
   TestScoring;
   TestLegalMoves;
   TestAI;
