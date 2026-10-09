@@ -1,0 +1,19 @@
+$EXEC
+${=============================================================================}
+${ MILES-LCOMP.TEXT -- compile ONLY the portable rules unit (MILES/LOGIC).     }
+${ This is the first-contact test: does Lisa Pascal accept MILES-LOGIC.TEXT?   }
+${ Run it from Workshop with:  <MILES/LCOMP                                    }
+${                                                                            }
+${ Same conventions as the Minesweeper build scripts:                          }
+${  - comment-only lines are written as exec lines (leading $) so they do not  }
+${    send a stray [RETURN] into the program that is reading input;            }
+${  - the one deliberate comment-only line below IS the [RETURN] that answers  }
+${    the compiler's "listing file?" prompt (no listing);                      }
+${  - the stale .OBJ is deleted first so an old object can never be reused.    }
+${=============================================================================}
+F{ilemgr}D{elete}MILES/LOGIC.OBJ  Y{es}
+        Q{uit}
+P{ascal Compile}MILES/LOGIC.TEXT
+{no listing file - this comment-only line IS the [RETURN] answer}
+MILES/LOGIC.OBJ
+$ENDEXEC

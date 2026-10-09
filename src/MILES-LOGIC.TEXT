@@ -1,0 +1,627 @@
+{ MILES-LOGIC: portable rules engine and computer opponent for 1000 Miles.        }
+{ No Lisa units are used here so the same file compiles on the Mac and on the Lisa. }
+unit MilesLogic;
+
+interface
+
+const
+  NumCards  = 106;
+  HandSize  = 6;
+  TripMiles = 1000;
+  Max200    = 2;
+  { RULE R1: playing a safety on your own turn gives an extra turn. }
+  SafetyExtraTurn = true;
+
+  ErrOK = 0;         ErrPhase = 1;       ErrNoCard = 2;      ErrNeedGo = 3;
+  ErrBlocked = 4;    ErrLimit = 5;       Err200 = 6;         ErrOver = 7;
+  ErrWrongRemedy = 8; ErrBadTarget = 9;  ErrImmune = 10;     ErrNoEffect = 11;
+  ErrNoNeed = 12;
+
+  PtSafety = 100;  PtCoup = 300;  PtAllSafe = 300;  PtTrip = 400;
+  PtDelayed = 300; PtSafeTrip = 300; PtShutout = 500;
+
+type
+  CardKind = (ckNone,
+              ck25, ck50, ck75, ck100, ck200,
+              hzAccident, hzOutOfGas, hzFlat, hzLimit, hzStop,
+              rmRepairs, rmGas, rmSpare, rmEndLimit, rmGo,
+              sfAce, sfTank, sfPunct, sfRoW);
+  Target = (tgSelf, tgOpponent, tgDiscard);
+  Phase  = (phDraw, phPlay, phCoup, phOver);
+
+  PlayerState = record
+    battle  : CardKind;                { ckNone, a remedy, or a blocking hazard }
+    limited : boolean;                 { speed limit in force }
+    safe    : array[0..3] of boolean;  { Ace, Tank, Puncture-proof, Right of Way }
+    viaCoup : array[0..3] of boolean;
+    miles   : integer;
+    n200    : integer;
+    handN   : integer;
+    hand    : array[1..7] of CardKind; { 7 only between draw and play }
+  end;
+
+  Game = record
+    pl          : array[0..1] of PlayerState;
+    deck        : array[1..NumCards] of CardKind;
+    deckNext    : integer;             { > NumCards when the pile is empty }
+    discardTop  : CardKind;
+    turn        : integer;             { 0 or 1 }
+    ph          : Phase;
+    rng         : longint;
+    tripBy      : integer;             { -1 none, else the seat that reached 1000 }
+    delayedTrip : boolean;
+    gone        : integer;             { cards removed from hands (played/discarded) }
+    coupSeat    : integer;
+    coupHazard  : CardKind;
+    prevBattle  : CardKind;
+    prevLimited : boolean;
+  end;
+
+  PlayMove = record
+    hand : integer;
+    tgt  : Target;
+  end;
+
+  MoveList = record
+    n : integer;
+    m : array[1..24] of PlayMove;
+  end;
+
+  ErrStr = string[63];
+
+function  Opp(s: integer): integer;
+function  KindCount(k: CardKind): integer;
+function  DistValue(k: CardKind): integer;
+function  IsDistance(k: CardKind): boolean;
+function  IsHazard(k: CardKind): boolean;
+function  IsRemedy(k: CardKind): boolean;
+function  IsSafety(k: CardKind): boolean;
+function  SafetyIdx(k: CardKind): integer;
+function  SafetyFor(h: CardKind): CardKind;
+function  NormSeed(s: longint): longint;
+function  RemainingDeck(var g: Game): integer;
+procedure NewGame(var g: Game; seed: longint);
+function  CanMoveNow(var p: PlayerState): boolean;
+function  CheckPlay(var g: Game; handIdx: integer; t: Target): integer;
+function  ErrText(e: integer): ErrStr;
+function  HandIndexOf(var p: PlayerState; k: CardKind): integer;
+procedure DrawCard(var g: Game);
+procedure DoPlay(var g: Game; handIdx: integer; t: Target; var err: integer);
+procedure ResolveCoup(var g: Game; useCoup: boolean);
+function  HandPoints(var g: Game; s: integer): longint;
+procedure LegalMoves(var g: Game; var ml: MoveList);
+procedure AIChoose(var g: Game; var mv: PlayMove);
+procedure RandomChoose(var g: Game; var mv: PlayMove);
+function  CheckInvariants(var g: Game): integer;
+{@IFACE}
+
+implementation
+
+function Opp(s: integer): integer;
+begin
+  Opp := 1 - s
+end;
+
+function IsSafety(k: CardKind): boolean;
+begin
+  IsSafety := (k >= sfAce) and (k <= sfRoW)
+end;
+
+function KindCount(k: CardKind): integer;
+begin
+  KindCount := 0;
+  if k = ck25 then KindCount := 10;
+  if k = ck50 then KindCount := 10;
+  if k = ck75 then KindCount := 10;
+  if k = ck100 then KindCount := 12;
+  if k = ck200 then KindCount := 4;
+  if k = hzAccident then KindCount := 3;
+  if k = hzOutOfGas then KindCount := 3;
+  if k = hzFlat then KindCount := 3;
+  if k = hzLimit then KindCount := 4;
+  if k = hzStop then KindCount := 5;
+  if k = rmRepairs then KindCount := 6;
+  if k = rmGas then KindCount := 6;
+  if k = rmSpare then KindCount := 6;
+  if k = rmEndLimit then KindCount := 6;
+  if k = rmGo then KindCount := 14;
+  if IsSafety(k) then KindCount := 1
+end;
+
+function DistValue(k: CardKind): integer;
+begin
+  DistValue := 0;
+  if k = ck25 then DistValue := 25;
+  if k = ck50 then DistValue := 50;
+  if k = ck75 then DistValue := 75;
+  if k = ck100 then DistValue := 100;
+  if k = ck200 then DistValue := 200
+end;
+
+function IsDistance(k: CardKind): boolean;
+begin
+  IsDistance := (k >= ck25) and (k <= ck200)
+end;
+
+function IsHazard(k: CardKind): boolean;
+begin
+  IsHazard := (k >= hzAccident) and (k <= hzStop)
+end;
+
+function IsRemedy(k: CardKind): boolean;
+begin
+  IsRemedy := (k >= rmRepairs) and (k <= rmGo)
+end;
+
+function SafetyIdx(k: CardKind): integer;
+begin
+  SafetyIdx := ord(k) - ord(sfAce)
+end;
+
+function SafetyFor(h: CardKind): CardKind;
+begin
+  SafetyFor := ckNone;
+  if h = hzAccident then SafetyFor := sfAce;
+  if h = hzOutOfGas then SafetyFor := sfTank;
+  if h = hzFlat then SafetyFor := sfPunct;
+  if h = hzLimit then SafetyFor := sfRoW;
+  if h = hzStop then SafetyFor := sfRoW
+end;
+
+{ Park-Miller minimal standard generator using Schrage's method: no 32-bit overflow. }
+function NextRand(var seed: longint): longint;
+var hi, lo: longint;
+begin
+  hi := seed div 127773;
+  lo := seed mod 127773;
+  seed := 16807 * lo - 2836 * hi;
+  if seed <= 0 then seed := seed + 2147483647;
+  NextRand := seed
+end;
+
+{ Any longint becomes a seed in 1..2147483646 (0 would make the generator stick at 0). }
+function NormSeed(s: longint): longint;
+begin
+  if s < 0 then s := -(s + 1);
+  s := s mod 2147483647;
+  if s = 0 then s := 1;
+  NormSeed := s
+end;
+
+function RandBelow(var g: Game; n: integer): integer;
+begin
+  RandBelow := NextRand(g.rng) mod n
+end;
+
+function RemainingDeck(var g: Game): integer;
+begin
+  RemainingDeck := NumCards + 1 - g.deckNext
+end;
+
+procedure DealTo(var g: Game; p: integer);
+begin
+  if g.deckNext <= NumCards then begin
+    g.pl[p].handN := g.pl[p].handN + 1;
+    g.pl[p].hand[g.pl[p].handN] := g.deck[g.deckNext];
+    g.deckNext := g.deckNext + 1
+  end
+end;
+
+procedure NewGame(var g: Game; seed: longint);
+var i, j, c, n, p: integer; k, t: CardKind;
+begin
+  g.rng := NormSeed(seed);
+  n := 0;
+  for k := ck25 to sfRoW do
+    for c := 1 to KindCount(k) do begin
+      n := n + 1;
+      g.deck[n] := k
+    end;
+  for i := NumCards downto 2 do begin
+    j := 1 + RandBelow(g, i);
+    t := g.deck[i];
+    g.deck[i] := g.deck[j];
+    g.deck[j] := t
+  end;
+  g.deckNext := 1;
+  for p := 0 to 1 do begin
+    g.pl[p].battle := ckNone;
+    g.pl[p].limited := false;
+    g.pl[p].miles := 0;
+    g.pl[p].n200 := 0;
+    g.pl[p].handN := 0;
+    for i := 0 to 3 do begin
+      g.pl[p].safe[i] := false;
+      g.pl[p].viaCoup[i] := false
+    end
+  end;
+  for i := 1 to HandSize do begin
+    DealTo(g, 0);
+    DealTo(g, 1)
+  end;
+  g.discardTop := ckNone;
+  g.turn := 0;
+  g.ph := phDraw;
+  g.tripBy := -1;
+  g.delayedTrip := false;
+  g.gone := 0;
+  g.coupSeat := -1;
+  g.coupHazard := ckNone;
+  g.prevBattle := ckNone;
+  g.prevLimited := false
+end;
+
+{ Can this player lay a distance card right now?  Right of Way acts as a permanent Go. }
+function CanMoveNow(var p: PlayerState): boolean;
+begin
+  if p.safe[3] then
+    CanMoveNow := not ((p.battle = hzAccident) or (p.battle = hzOutOfGas) or (p.battle = hzFlat))
+  else
+    CanMoveNow := (p.battle = rmGo)
+end;
+
+function CheckSelf(var p: PlayerState; k: CardKind): integer;
+var r: integer;
+begin
+  r := ErrOK;
+  if IsDistance(k) then begin
+    if not CanMoveNow(p) then begin
+      if IsHazard(p.battle) then r := ErrBlocked else r := ErrNeedGo
+    end
+    else if p.limited and (not p.safe[3]) and (DistValue(k) > 50) then r := ErrLimit
+    else if (k = ck200) and (p.n200 >= Max200) then r := Err200
+    else if p.miles + DistValue(k) > TripMiles then r := ErrOver
+  end
+  else if k = rmGo then begin
+    if p.safe[3] then r := ErrNoNeed
+    else if p.battle = rmGo then r := ErrNoNeed
+    else if (p.battle = hzAccident) or (p.battle = hzOutOfGas) or (p.battle = hzFlat) then
+      r := ErrWrongRemedy
+  end
+  else if k = rmRepairs then begin
+    if p.battle <> hzAccident then r := ErrWrongRemedy
+  end
+  else if k = rmGas then begin
+    if p.battle <> hzOutOfGas then r := ErrWrongRemedy
+  end
+  else if k = rmSpare then begin
+    if p.battle <> hzFlat then r := ErrWrongRemedy
+  end
+  else if k = rmEndLimit then begin
+    if not p.limited then r := ErrNoNeed
+  end
+  else if IsSafety(k) then begin
+    if p.safe[SafetyIdx(k)] then r := ErrNoNeed
+  end
+  else r := ErrBadTarget;
+  CheckSelf := r
+end;
+
+{ RULE R3: a hazard needs a victim who can currently move; Limit needs only 'not limited'. }
+function CheckAttack(var o: PlayerState; k: CardKind): integer;
+var r: integer;
+begin
+  r := ErrOK;
+  if not IsHazard(k) then r := ErrBadTarget
+  else if k = hzLimit then begin
+    if o.safe[3] then r := ErrImmune
+    else if o.limited then r := ErrNoEffect
+  end
+  else if o.safe[SafetyIdx(SafetyFor(k))] then r := ErrImmune
+  else if not CanMoveNow(o) then r := ErrNoEffect;
+  CheckAttack := r
+end;
+
+function CheckPlay(var g: Game; handIdx: integer; t: Target): integer;
+var s: integer; k: CardKind;
+begin
+  s := g.turn;
+  CheckPlay := ErrOK;
+  if g.ph <> phPlay then CheckPlay := ErrPhase
+  else if (handIdx < 1) or (handIdx > g.pl[s].handN) then CheckPlay := ErrNoCard
+  else begin
+    k := g.pl[s].hand[handIdx];
+    if t = tgDiscard then CheckPlay := ErrOK
+    else if t = tgSelf then CheckPlay := CheckSelf(g.pl[s], k)
+    else CheckPlay := CheckAttack(g.pl[Opp(s)], k)
+  end
+end;
+
+function ErrText(e: integer): ErrStr;
+begin
+  ErrText := 'That play is not allowed.';
+  if e = ErrOK then ErrText := '';
+  if e = ErrPhase then ErrText := 'Draw a card first.';
+  if e = ErrNoCard then ErrText := 'Pick a card from your hand.';
+  if e = ErrNeedGo then ErrText := 'You need a Go card first.';
+  if e = ErrBlocked then ErrText := 'You must fix your problem before moving.';
+  if e = ErrLimit then ErrText := 'Speed limit: 50 miles or less.';
+  if e = Err200 then ErrText := 'Only two 200-mile cards per hand.';
+  if e = ErrOver then ErrText := 'That would go past 1000 miles.';
+  if e = ErrWrongRemedy then ErrText := 'That is not the right remedy.';
+  if e = ErrBadTarget then ErrText := 'That card cannot go there.';
+  if e = ErrImmune then ErrText := 'They are protected by a safety.';
+  if e = ErrNoEffect then ErrText := 'That would have no effect right now.';
+  if e = ErrNoNeed then ErrText := 'You do not need that.'
+end;
+
+function HandIndexOf(var p: PlayerState; k: CardKind): integer;
+var i, r: integer;
+begin
+  r := 0;
+  for i := p.handN downto 1 do
+    if p.hand[i] = k then r := i;
+  HandIndexOf := r
+end;
+
+procedure RemoveFromHand(var g: Game; s, idx: integer);
+var i: integer;
+begin
+  for i := idx to g.pl[s].handN - 1 do
+    g.pl[s].hand[i] := g.pl[s].hand[i + 1];
+  g.pl[s].handN := g.pl[s].handN - 1;
+  g.gone := g.gone + 1
+end;
+
+{ RULE R5: ends the hand at exactly 1000, or when the pile and both hands are empty. }
+procedure EndTurn(var g: Game);
+var nxt: integer;
+begin
+  if g.pl[g.turn].miles = TripMiles then begin
+    g.tripBy := g.turn;
+    g.delayedTrip := (g.deckNext > NumCards);
+    g.ph := phOver
+  end
+  else begin
+    nxt := Opp(g.turn);
+    if g.deckNext > NumCards then begin
+      if (g.pl[0].handN = 0) and (g.pl[1].handN = 0) then g.ph := phOver
+      else begin
+        if g.pl[nxt].handN > 0 then g.turn := nxt;
+        g.ph := phDraw
+      end
+    end
+    else begin
+      g.turn := nxt;
+      g.ph := phDraw
+    end
+  end
+end;
+
+procedure ExtraTurn(var g: Game);
+begin
+  if SafetyExtraTurn and ((g.deckNext <= NumCards) or (g.pl[g.turn].handN > 0)) then
+    g.ph := phDraw
+  else
+    EndTurn(g)
+end;
+
+{ Put a safety in play and apply the cure it gives; used by a normal play and by a coup. }
+procedure ApplySafety(var p: PlayerState; k: CardKind);
+begin
+  p.safe[SafetyIdx(k)] := true;
+  if (k = sfAce) and (p.battle = hzAccident) then p.battle := rmRepairs;
+  if (k = sfTank) and (p.battle = hzOutOfGas) then p.battle := rmGas;
+  if (k = sfPunct) and (p.battle = hzFlat) then p.battle := rmSpare;
+  if k = sfRoW then begin
+    p.limited := false;
+    if p.battle = hzStop then p.battle := rmGo
+  end
+end;
+
+procedure ApplySelf(var g: Game; s: integer; k: CardKind);
+begin
+  with g.pl[s] do begin
+    if IsDistance(k) then begin
+      miles := miles + DistValue(k);
+      if k = ck200 then n200 := n200 + 1
+    end
+    else if k = rmGo then battle := rmGo
+    else if (k = rmRepairs) or (k = rmGas) or (k = rmSpare) then battle := k
+    else if k = rmEndLimit then limited := false
+    else ApplySafety(g.pl[s], k)
+  end
+end;
+
+procedure DrawCard(var g: Game);
+begin
+  if g.ph = phDraw then begin
+    DealTo(g, g.turn);
+    g.ph := phPlay
+  end
+end;
+
+procedure DoPlay(var g: Game; handIdx: integer; t: Target; var err: integer);
+var s, o: integer; k: CardKind;
+begin
+  err := CheckPlay(g, handIdx, t);
+  if err = ErrOK then begin
+    s := g.turn;
+    o := Opp(s);
+    k := g.pl[s].hand[handIdx];
+    RemoveFromHand(g, s, handIdx);
+    if t = tgDiscard then begin
+      g.discardTop := k;
+      EndTurn(g)
+    end
+    else if t = tgOpponent then begin
+      g.coupHazard := k;
+      g.prevBattle := g.pl[o].battle;
+      g.prevLimited := g.pl[o].limited;
+      if k = hzLimit then g.pl[o].limited := true
+      else g.pl[o].battle := k;
+      if HandIndexOf(g.pl[o], SafetyFor(k)) > 0 then begin
+        g.coupSeat := o;
+        g.ph := phCoup
+      end
+      else EndTurn(g)
+    end
+    else begin
+      ApplySelf(g, s, k);
+      if IsSafety(k) then ExtraTurn(g) else EndTurn(g)
+    end
+  end
+end;
+
+{ RULE R2: a coup undoes the hazard, draws a replacement, and the victim takes the next turn. }
+procedure ResolveCoup(var g: Game; useCoup: boolean);
+var c, i: integer; sf: CardKind;
+begin
+  if g.ph = phCoup then begin
+    c := g.coupSeat;
+    sf := SafetyFor(g.coupHazard);
+    i := HandIndexOf(g.pl[c], sf);
+    g.coupSeat := -1;
+    if useCoup and (i > 0) then begin
+      RemoveFromHand(g, c, i);
+      g.pl[c].viaCoup[SafetyIdx(sf)] := true;
+      g.pl[c].battle := g.prevBattle;
+      g.pl[c].limited := g.prevLimited;
+      ApplySafety(g.pl[c], sf);                  { Right of Way also clears an older Stop/Limit }
+      DealTo(g, c);
+      if g.pl[c].handN = 0 then EndTurn(g)
+      else begin
+        g.turn := c;
+        g.ph := phDraw
+      end
+    end
+    else EndTurn(g)
+  end
+end;
+
+function HandPoints(var g: Game; s: integer): longint;
+var i, nsafe: integer; pts: longint;
+begin
+  pts := g.pl[s].miles;
+  nsafe := 0;
+  for i := 0 to 3 do
+    if g.pl[s].safe[i] then begin
+      nsafe := nsafe + 1;
+      pts := pts + PtSafety;
+      if g.pl[s].viaCoup[i] then pts := pts + PtCoup
+    end;
+  if nsafe = 4 then pts := pts + PtAllSafe;
+  if g.tripBy = s then begin
+    pts := pts + PtTrip;
+    if g.delayedTrip then pts := pts + PtDelayed;
+    if g.pl[s].n200 = 0 then pts := pts + PtSafeTrip;
+    if g.pl[Opp(s)].miles = 0 then pts := pts + PtShutout
+  end;
+  HandPoints := pts
+end;
+
+procedure LegalMoves(var g: Game; var ml: MoveList);
+var i: integer; t: Target;
+begin
+  ml.n := 0;
+  if g.ph = phPlay then
+    for i := 1 to g.pl[g.turn].handN do
+      for t := tgSelf to tgDiscard do
+        if CheckPlay(g, i, t) = ErrOK then begin
+          ml.n := ml.n + 1;
+          ml.m[ml.n].hand := i;
+          ml.m[ml.n].tgt := t
+        end
+end;
+
+function DiscardValue(k: CardKind): integer;
+begin
+  if IsSafety(k) then DiscardValue := -50
+  else if IsHazard(k) then DiscardValue := 5
+  else if IsRemedy(k) then DiscardValue := 7
+  else DiscardValue := 6
+end;
+
+function SafetyValue(var g: Game; s: integer; k: CardKind): integer;
+var needed: boolean;
+begin
+  needed := false;
+  if (k = sfAce) and (g.pl[s].battle = hzAccident) then needed := true;
+  if (k = sfTank) and (g.pl[s].battle = hzOutOfGas) then needed := true;
+  if (k = sfPunct) and (g.pl[s].battle = hzFlat) then needed := true;
+  if (k = sfRoW) and ((g.pl[s].battle = hzStop) or g.pl[s].limited) then needed := true;
+  if needed then SafetyValue := 100
+  else if g.deckNext > NumCards then SafetyValue := 85    { no coup chances left: bank it }
+  else SafetyValue := 20                                    { hold it for a coup fourre }
+end;
+
+{ Priority: cure > win > Go > mileage > attack > end limit > hold safety > discard. }
+function MoveValue(var g: Game; var mv: PlayMove): integer;
+var s, v: integer; k: CardKind;
+begin
+  s := g.turn;
+  k := g.pl[s].hand[mv.hand];
+  if mv.tgt = tgDiscard then MoveValue := DiscardValue(k)
+  else if mv.tgt = tgOpponent then begin
+    if k = hzLimit then MoveValue := 55
+    else if k = hzStop then MoveValue := 70
+    else MoveValue := 75
+  end
+  else if IsDistance(k) then begin
+    v := DistValue(k);
+    if g.pl[s].miles + v = TripMiles then MoveValue := 99
+    else if k = ck200 then MoveValue := 30
+    else MoveValue := 40 + v div 5
+  end
+  else if IsSafety(k) then MoveValue := SafetyValue(g, s, k)
+  else if k = rmGo then MoveValue := 92
+  else if k = rmEndLimit then MoveValue := 60
+  else MoveValue := 95
+end;
+
+procedure AIChoose(var g: Game; var mv: PlayMove);
+var ml: MoveList; i, best, bv, v: integer;
+begin
+  LegalMoves(g, ml);
+  best := 1;
+  bv := -1000;
+  for i := 1 to ml.n do begin
+    v := MoveValue(g, ml.m[i]);
+    if v > bv then begin
+      bv := v;
+      best := i
+    end
+  end;
+  mv := ml.m[best]
+end;
+
+procedure RandomChoose(var g: Game; var mv: PlayMove);
+var ml: MoveList;
+begin
+  LegalMoves(g, ml);
+  mv := ml.m[1 + RandBelow(g, ml.n)]
+end;
+
+{ Returns 0 when the game state is self-consistent, else a code identifying the problem. }
+function CheckInvariants(var g: Game): integer;
+var p, i, tot, r: integer;
+begin
+  r := 0;
+  tot := RemainingDeck(g);
+  for p := 0 to 1 do begin
+    tot := tot + g.pl[p].handN;
+    if (g.pl[p].handN < 0) or (g.pl[p].handN > 7) then r := 1;
+    if (g.pl[p].miles < 0) or (g.pl[p].miles > TripMiles) then r := 2;
+    if (g.pl[p].n200 < 0) or (g.pl[p].n200 > Max200) then r := 3
+  end;
+  if tot + g.gone <> NumCards then r := 4;
+  for p := 0 to 1 do begin
+    if g.pl[p].safe[3] and (g.pl[p].limited or (g.pl[p].battle = hzStop)) then r := 5;
+    for i := 0 to 3 do
+      if g.pl[p].viaCoup[i] and (not g.pl[p].safe[i]) then r := 6
+  end;
+  if (g.turn < 0) or (g.turn > 1) then r := 7;
+  if (g.ph = phCoup) and ((g.coupSeat < 0) or (g.coupSeat > 1)) then r := 8;
+  if (g.ph <> phCoup) and (g.coupSeat <> -1) then r := 8;
+  if g.tripBy > 1 then r := 9;
+  if g.tripBy >= 0 then begin
+    if g.tripBy <= 1 then begin
+      if g.pl[g.tripBy].miles <> TripMiles then r := 9
+    end
+  end;
+  CheckInvariants := r
+end;
+
+{@IMPL}
+
+end.
