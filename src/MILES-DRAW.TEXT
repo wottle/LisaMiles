@@ -47,9 +47,9 @@ const
    statusTextY = 291;
 
 var
-   iconData  : array [1..15, 0..71] of integer;   { the card pictures, as QuickDraw bitmaps }
-   contentR  : Rect;        { the whole content area: the clip restored after each card }
-   shownUnits: longint;     { TEMPORARY: clock speed as last shown in the status line }
+   miPix  : array [1..15, 0..71] of integer;   { the card pictures, as QuickDraw bitmaps }
+   miWhole  : Rect;        { the whole content area: the clip restored after each card }
+   miSpeed: longint;     { TEMPORARY: clock speed as last shown in the status line }
    shownG    : Game;        { the game state as last painted }
    shownU    : UIState;     { the UI state as last painted }
    haveShown : boolean;     { false until the first full paint }
@@ -62,15 +62,15 @@ begin
    for i := 1 to NumIcons do begin
       LoadIcon(i, buf);
       for j := 0 to IconWords - 1 do
-         iconData[i, j] := buf[j]
+         miPix[i, j] := buf[j]
    end
 end;
 
 procedure InitDraw {};
 begin
    haveShown := false;
-   shownUnits := 0;
-   SetRect(contentR, 0, 0, ContentW, ContentH);
+   miSpeed := 0;
+   SetRect(miWhole, 0, 0, ContentW, ContentH);
    FillIcons
 end;
 
@@ -121,7 +121,7 @@ var src : BitMap;
     dst : Rect;
 begin
    if icon = 0 then exit(ShowIcon);
-   src.baseAddr := @iconData[icon, 0];
+   src.baseAddr := @miPix[icon, 0];
    src.rowBytes := IconRowBytes;
    SetRect(src.bounds, 0, 0, IconW, IconRows(icon));
    SetRect(dst, left, top, left + IconW, top + IconRows(icon));
@@ -182,7 +182,7 @@ begin
             InvertRect(r)                                  { hazards are black cards }
       end
    end;
-   ClipRect(contentR)
+   ClipRect(miWhole)
 end;
 
 { The miles-travelled box: a framed number. }
@@ -416,7 +416,7 @@ begin
    t := concat(t, ' dbl=', s);
    MoveTo(500, statusTextY);
    DrawString(t);
-   shownUnits := unitsPerSec
+   miSpeed := unitsPerSec
 end;
 
 procedure Remember;
@@ -510,7 +510,7 @@ begin
    if handChanged then DrawHandStrip;
 
    if (StatusMsg(shownU, shownG) <> StatusMsg(ui, theGame)) or (shownU.lastCard <> ui.lastCard) or
-      (shownUnits <> unitsPerSec) then
+      (miSpeed <> unitsPerSec) then
       DrawStatusText;
 
    Remember
