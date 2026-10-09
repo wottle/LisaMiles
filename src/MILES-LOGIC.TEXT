@@ -8,6 +8,7 @@ const
   NumCards  = 106;
   HandSize  = 6;
   TripMiles = 1000;
+  ExtendMiles = 700;     { landing on exactly this many miles offers the extension to 1000 }
   Max200    = 2;
   { RULE R1: playing a safety on your own turn gives an extra turn. }
   SafetyExtraTurn = true;
@@ -19,6 +20,7 @@ const
 
   PtSafety = 100;  PtCoup = 300;  PtAllSafe = 300;  PtTrip = 400;
   PtDelayed = 300; PtSafeTrip = 300; PtShutout = 500;
+  PtExtension = 200;     { completing the trip after extending from 700 to 1000 }
 
 type
   CardKind = (ckNone,
@@ -27,7 +29,7 @@ type
               rmRepairs, rmGas, rmSpare, rmEndLimit, rmGo,
               sfAce, sfTank, sfPunct, sfRoW);
   Target = (tgSelf, tgOpponent, tgDiscard);
-  Phase  = (phDraw, phPlay, phCoup, phOver);
+  Phase  = (phDraw, phPlay, phCoup, phExtend, phOver);
 
   PlayerState = record
     battle  : CardKind;                { ckNone, a remedy, or a blocking hazard }
@@ -35,6 +37,7 @@ type
     safe    : array[0..3] of boolean;  { Ace, Tank, Puncture-proof, Right of Way }
     viaCoup : array[0..3] of boolean;
     miles   : integer;
+    extended: boolean;                 { chose to extend from 700 to 1000 }
     n200    : integer;
     handN   : integer;
     hand    : array[1..7] of CardKind; { 7 only between draw and play }
@@ -52,6 +55,7 @@ type
     delayedTrip : boolean;
     gone        : integer;             { cards removed from hands (played/discarded) }
     coupSeat    : integer;
+    extSeat     : integer;             { who must choose extend-or-stop (phExtend), else -1 }
     coupHazard  : CardKind;
     prevBattle  : CardKind;
     prevLimited : boolean;
@@ -89,6 +93,8 @@ function  CanPlayAny(var g: Game; s: integer): boolean;
 procedure DrawCard(var g: Game);
 procedure DoPlay(var g: Game; handIdx: integer; t: Target; var err: integer);
 procedure ResolveCoup(var g: Game; useCoup: boolean);
+procedure ResolveExtension(var g: Game; extend: boolean);
+function  AIExtend(var g: Game): boolean;
 function  HandPoints(var g: Game; s: integer): longint;
 procedure LegalMoves(var g: Game; var ml: MoveList);
 procedure AIChoose(var g: Game; var mv: PlayMove);
@@ -229,6 +235,7 @@ begin
     g.pl[p].battle := ckNone;
     g.pl[p].limited := false;
     g.pl[p].miles := 0;
+    g.pl[p].extended := false;
     g.pl[p].n200 := 0;
     g.pl[p].handN := 0;
     for i := 0 to 3 do begin
@@ -247,6 +254,7 @@ begin
   g.delayedTrip := false;
   g.gone := 0;
   g.coupSeat := -1;
+  g.extSeat := -1;
   g.coupHazard := ckNone;
   g.prevBattle := ckNone;
   g.prevLimited := false
@@ -480,7 +488,12 @@ begin
     end
     else begin
       ApplySelf(g, s, k);
-      if IsSafety(k) then ExtraTurn(g) else EndTurn(g)
+      if IsSafety(k) then ExtraTurn(g)
+      else if IsDistance(k) and (g.pl[s].miles = ExtendMiles) and (not g.pl[s].extended) then begin
+        g.extSeat := s;                  { exactly 700: extend to 1000, or stop here? }
+        g.ph := phExtend
+      end
+      else EndTurn(g)
     end
   end
 end;
@@ -507,6 +520,33 @@ begin
   end
 end;
 
+{ The player at 700 miles chose: extend to 1000 (the match goes on) or stop (the trip is complete at 700). }
+procedure ResolveExtension(var g: Game; extend: boolean);
+var s: integer;
+begin
+  if g.ph = phExtend then begin
+    s := g.extSeat;
+    g.extSeat := -1;
+    if extend then begin
+      g.pl[s].extended := true;
+      EndTurn(g)
+    end
+    else begin
+      g.tripBy := s;
+      g.delayedTrip := (g.deckNext > NumCards);
+      g.ph := phOver
+    end
+  end
+end;
+
+{ The computer's choice at 700: extend only when it holds a lead big enough to risk the extra turns. }
+function AIExtend(var g: Game): boolean;
+var s: integer;
+begin
+  s := g.extSeat;
+  AIExtend := (g.pl[s].miles - g.pl[Opp(s)].miles) >= 250
+end;
+
 function HandPoints(var g: Game; s: integer): longint;
 var i, nsafe: integer; pts: longint;
 begin
@@ -522,6 +562,7 @@ begin
   if g.tripBy = s then begin
     pts := pts + PtTrip;
     if g.delayedTrip then pts := pts + PtDelayed;
+    if g.pl[s].extended then pts := pts + PtExtension;
     if g.pl[s].n200 = 0 then pts := pts + PtSafeTrip;
     if g.pl[Opp(s)].miles = 0 then pts := pts + PtShutout
   end;
@@ -631,10 +672,15 @@ begin
   if (g.turn < 0) or (g.turn > 1) then r := 7;
   if (g.ph = phCoup) and ((g.coupSeat < 0) or (g.coupSeat > 1)) then r := 8;
   if (g.ph <> phCoup) and (g.coupSeat <> -1) then r := 8;
+  if (g.ph = phExtend) and ((g.extSeat < 0) or (g.extSeat > 1)) then r := 10;
+  if (g.ph <> phExtend) and (g.extSeat <> -1) then r := 10;
   if g.tripBy > 1 then r := 9;
   if g.tripBy >= 0 then begin
     if g.tripBy <= 1 then begin
-      if g.pl[g.tripBy].miles <> TripMiles then r := 9
+      if g.pl[g.tripBy].miles <> TripMiles then begin
+        { the only other finished trip is a stop at exactly 700 (no extension) }
+        if (g.pl[g.tripBy].miles <> ExtendMiles) or g.pl[g.tripBy].extended then r := 9
+      end
     end
   end;
   CheckInvariants := r

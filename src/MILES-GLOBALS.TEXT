@@ -51,12 +51,12 @@ const
    alrtRules     = 40;
 
    phStatusBase  = 910;     { status text = 910 + a status code (an Err or Msg code) }
-   phCardBase    = 940;     { card caption = 940 + ord(card kind) }
-   phComputer    = 960;
-   phYou         = 961;
-   phMiles       = 962;
-   phMatch       = 963;
-   phNext        = 964;
+   phCardBase    = 970;     { card caption = 970 + ord(card kind) }
+   phComputer    = 990;
+   phYou         = 991;
+   phMiles       = 992;
+   phMatch       = 993;
+   phNext        = 994;
 
    fntCaption = tile12;     { card captions and labels }
    fntBig     = tile18;     { card numerals }

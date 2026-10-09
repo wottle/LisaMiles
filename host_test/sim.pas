@@ -10,6 +10,7 @@ var
   n, seed: longint;
   code: integer;
   steps, bad, failures, trips, coups, i, totalSteps: longint;
+  extendedHands, stoppedAt700: longint;
   pts0, pts1: longint;
   sigA, sigB: longint;
 
@@ -33,6 +34,12 @@ begin
   while (g.ph <> phOver) and (steps < MaxSteps) and (bad = 0) do begin
     steps := steps + 1;
     if g.ph = phDraw then DrawCard(g)
+    else if g.ph = phExtend then begin
+      if ((g.extSeat = 0) and smart0) or ((g.extSeat = 1) and smart1) then
+        ResolveExtension(g, AIExtend(g))
+      else
+        ResolveExtension(g, odd(sd + steps))
+    end
     else if g.ph = phCoup then ResolveCoup(g, (sd + steps) mod 3 <> 0)   { decline about 1 in 3 }
     else begin
       if ((g.turn = 0) and smart0) or ((g.turn = 1) and smart1) then AIChoose(g, mv)
@@ -52,6 +59,7 @@ end;
 
 begin
   n := ParseCount;
+  extendedHands := 0; stoppedAt700 := 0;
   failures := 0; trips := 0; coups := 0; totalSteps := 0; pts0 := 0; pts1 := 0;
   for seed := 1 to n do
     for i := 0 to 2 do begin
@@ -61,6 +69,8 @@ begin
         writeln('FAIL seed ', seed, ' mode ', i, ' code ', bad, ' after ', steps, ' steps')
       end;
       if g.tripBy >= 0 then trips := trips + 1;
+      if g.pl[0].extended or g.pl[1].extended then extendedHands := extendedHands + 1;
+      if (g.tripBy >= 0) and (g.pl[g.tripBy].miles = ExtendMiles) then stoppedAt700 := stoppedAt700 + 1;
       totalSteps := totalSteps + steps;
       if i = 0 then begin
         pts0 := pts0 + HandPoints(g, 0);
@@ -78,7 +88,7 @@ begin
     writeln('FAIL: same seed produced different games')
   end;
   writeln(n * 3, ' games; ', failures, ' failures; ', trips, ' completed trips; ',
-          totalSteps div (n * 3), ' avg steps; ', coups, ' coups fourre');
+          totalSteps div (n * 3), ' avg steps; ', coups, ' coups fourre; ', extendedHands, ' extended, ', stoppedAt700, ' stopped at 700');
   writeln('AI v AI average points: seat0 ', pts0 div n, ', seat1 ', pts1 div n);
   if failures > 0 then halt(1)
 end.

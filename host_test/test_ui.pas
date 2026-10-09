@@ -363,7 +363,14 @@ begin
   steps := 0; bad := 0; answer := 0;
   while (g.ph <> phOver) and (steps < 4000) and (bad = 0) do begin
     steps := steps + 1;
-    if g.ph = phCoup then begin
+    if g.ph = phExtend then begin
+      if g.extSeat = 0 then begin
+        answer := answer + 1;
+        UIExtendAnswer(u, g, odd(answer div 2), ev)
+      end
+      else UIAdvance(u, g, ev)
+    end
+    else if g.ph = phCoup then begin
       if g.coupSeat = 0 then begin
         answer := answer + 1;
         UICoupAnswer(u, g, odd(answer), ev)
@@ -387,7 +394,7 @@ begin
         if ev <> ueSelect then bad := 4;
         if bad = 0 then begin
           ClickHandAt(mv.hand, clk + 10, ev);
-          if (ev <> ueMoved) and (ev <> ueHandOver) then bad := 5
+          if (ev <> ueMoved) and (ev <> ueHandOver) and (ev <> ueExtendPrompt) then bad := 5
         end
       end
       else begin
@@ -399,7 +406,7 @@ begin
           else if mv.tgt = tgSelf then SlotBox(0, NaturalSlot(k), b)
           else SlotBox(1, NaturalSlot(k), b);
           ClickBox(b, ev);
-          if (ev <> ueMoved) and (ev <> ueHandOver) then bad := 3
+          if (ev <> ueMoved) and (ev <> ueHandOver) and (ev <> ueExtendPrompt) then bad := 3
         end
       end
     end;
@@ -686,6 +693,127 @@ begin
   CheckEq(UITarget(u, g, 0), -1, 'target: nothing is highlighted when the match is over')
 end;
 
+procedure TestExtensionFlow;
+var ev: UIEvent;
+begin
+  { you reach 700: the game asks, and nothing else works until you answer }
+  FreshPlay;
+  SetHand(g, 0, ck100, ck25, ck25, ck25, ck25, ck25);
+  g.pl[0].battle := rmGo; g.pl[0].miles := 600;
+  ClickHand(1, ev);
+  ClickSlot(0, SlotMiles, ev);
+  Check(ev = ueExtendPrompt, 'extflow: reaching 700 asks whether to extend');
+  Check(g.ph = phExtend, 'extflow: the game waits');
+  ClickHand(1, ev);
+  Check(ev = ueNone, 'extflow: clicks are ignored while the question is pending');
+  UIAdvance(u, g, ev);
+  Check(ev = ueExtendPrompt, 'extflow: the question stays pending until answered');
+
+  UIExtendAnswer(u, g, true, ev);
+  Check(ev = ueMoved, 'extflow: extending continues the match');
+  Check(g.pl[0].extended, 'extflow: you are marked as extended');
+  CheckEq(g.turn, 1, 'extflow: the turn passes to the computer');
+
+  { stopping ends the match at 700 and scores it }
+  FreshPlay;
+  SetHand(g, 0, ck100, ck25, ck25, ck25, ck25, ck25);
+  g.pl[0].battle := rmGo; g.pl[0].miles := 600;
+  ClickHand(1, ev);
+  ClickSlot(0, SlotMiles, ev);
+  UIExtendAnswer(u, g, false, ev);
+  Check(ev = ueHandOver, 'extflow: stopping ends the match');
+  CheckEq(u.match[0], 700 + 400 + 300 + 500, 'extflow: the 700-mile trip is scored');
+
+  { a double-click that lands on 700 asks too }
+  FreshPlay;
+  SetHand(g, 0, ck100, ck25, ck25, ck25, ck25, ck25);
+  g.pl[0].battle := rmGo; g.pl[0].miles := 600;
+  ClickHandAt(1, 1000, ev);
+  ClickHandAt(1, 1010, ev);
+  Check(ev = ueExtendPrompt, 'extflow: a double-click to 700 asks as well');
+
+  { the computer reaches 700 well ahead: it extends by itself and says so }
+  UIInit(u);
+  UINewHand(u, g, 5);
+  SetHand(g, 1, ck100, ck25, ck25, ck25, ck25, ck25);
+  g.pl[1].battle := rmGo; g.pl[1].miles := 600; g.pl[0].miles := 100;
+  g.turn := 1; g.ph := phPlay;
+  UIAdvance(u, g, ev);
+  Check(g.pl[1].extended, 'extflow: a computer with a big lead extends');
+  CheckEq(u.msg, MsgCpuExtend, 'extflow: ...and the status says so');
+  Check(g.ph = phDraw, 'extflow: ...and the match goes on');
+  CheckEq(g.turn, 0, 'extflow: ...to your turn');
+
+  { the computer reaches 700 with the opponent close behind: it takes the sure win }
+  UIInit(u);
+  UINewHand(u, g, 5);
+  SetHand(g, 1, ck100, ck25, ck25, ck25, ck25, ck25);
+  g.pl[1].battle := rmGo; g.pl[1].miles := 600; g.pl[0].miles := 650;
+  g.turn := 1; g.ph := phPlay;
+  UIAdvance(u, g, ev);
+  Check(ev = ueHandOver, 'extflow: a computer with a thin lead stops at 700');
+  CheckEq(g.tripBy, 1, 'extflow: ...and wins the match');
+  CheckEq(u.match[1], 700 + 400 + 300, 'extflow: ...scored at 700')
+end;
+
+procedure TestGameOver;
+var ev: UIEvent; b: Box;
+begin
+  { reaching 5000 ends the whole game; the higher total wins }
+  FreshPlay;
+  SetHand(g, 0, ck25, ck25, ck25, ck25, ck25, ck25);
+  g.pl[0].battle := rmGo; g.pl[0].miles := 975;
+  u.match[0] := 3000; u.match[1] := 2000;
+  ClickHand(1, ev);
+  ClickSlot(0, SlotMiles, ev);
+  Check(ev = ueHandOver, 'over5000: the winning match ends');
+  CheckEq(u.match[0], 3000 + 1000 + 400 + 300 + 500, 'over5000: and is added to the total');
+  Check(u.gameOver, 'over5000: 5000 reached means the game is over');
+  CheckEq(u.winner, 0, 'over5000: you have the higher score');
+  CheckEq(StatusMsg(u, g), MsgGameOver, 'over5000: the status says the game is over');
+  NextBox(b); ClickBox(b, ev);
+  Check(ev = ueNone, 'over5000: Next Match no longer works');
+  UINewGame(u, g, 4);
+  Check(not u.gameOver, 'over5000: New Game starts afresh');
+  CheckEq(u.match[0], 0, 'over5000: ...with zero scores');
+
+  { the computer gets to 5000 with the higher score }
+  UIInit(u);
+  UINewHand(u, g, 5);
+  g.pl[1].miles := 1000; g.tripBy := 1; g.ph := phOver;
+  u.match[0] := 100; u.match[1] := 3000;
+  UIAdvance(u, g, ev);
+  Check(u.gameOver, 'over5000: the computer passing 5000 ends the game');
+  CheckEq(u.winner, 1, 'over5000: ...and it has the higher score');
+
+  { both past 5000: the higher total still wins }
+  UIInit(u);
+  UINewHand(u, g, 5);
+  g.ph := phOver;
+  u.match[0] := 5200; u.match[1] := 5100;
+  UIAdvance(u, g, ev);
+  Check(u.gameOver, 'over5000: both players past 5000 still ends it');
+  CheckEq(u.winner, 0, 'over5000: ...with the higher total winning');
+
+  { an exact tie at or above 5000 keeps the game going }
+  UIInit(u);
+  UINewHand(u, g, 5);
+  g.ph := phOver;
+  u.match[0] := 5000; u.match[1] := 5000;
+  UIAdvance(u, g, ev);
+  Check(not u.gameOver, 'over5000: a tie keeps the game going');
+  NextBox(b); ClickBox(b, ev);
+  Check(ev = ueNextHand, 'over5000: ...and Next Match still works');
+
+  { below 5000 nothing special happens }
+  UIInit(u);
+  UINewHand(u, g, 5);
+  g.ph := phOver;
+  u.match[0] := 4999; u.match[1] := 100;
+  UIAdvance(u, g, ev);
+  Check(not u.gameOver, 'over5000: 4999 is not enough')
+end;
+
 procedure TestIgnoredClicks;
 var ev: UIEvent; b: Box; before: integer;
 begin
@@ -726,6 +854,8 @@ begin
   TestCoupFlows;
   TestHandOverScoresOnce;
   TestIgnoredClicks;
+  TestExtensionFlow;
+  TestGameOver;
   TestTargets;
   TestDoubleClickPlays;
   TestDoubleClickRefusals;

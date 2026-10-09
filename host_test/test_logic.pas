@@ -480,6 +480,97 @@ begin
   CheckEq(CheckPlay(g, 2, tgOpponent), ErrNoEffect, 'cure: ...any hazard')
 end;
 
+procedure TestExtension;
+var err: integer;
+begin
+  { reaching exactly 700 miles asks the player whether to extend to 1000 }
+  FreshPlay(g);
+  SetHand(g, 0, ck100, ck25, ck25, ck25, ck25, ck25);
+  g.pl[0].battle := rmGo; g.pl[0].miles := 600;
+  DoPlay(g, 1, tgSelf, err);
+  CheckEq(err, ErrOK, 'ext: 600+100 is a legal play');
+  Check(g.ph = phExtend, 'ext: exactly 700 waits for the extend-or-stop decision');
+  CheckEq(g.extSeat, 0, 'ext: from the player who got there');
+  CheckEq(CheckPlay(g, 1, tgDiscard), ErrPhase, 'ext: nothing can be played until it is decided');
+  CheckEq(CheckInvariants(g), 0, 'ext: the state is consistent while waiting');
+
+  { extend: the match goes on, the turn passes, and the player is marked as having extended }
+  ResolveExtension(g, true);
+  Check(g.pl[0].extended, 'ext: extending marks the player');
+  CheckEq(g.turn, 1, 'ext: the turn passes on');
+  Check(g.ph = phDraw, 'ext: the next player draws');
+  CheckEq(g.extSeat, -1, 'ext: nothing is pending any more');
+  CheckEq(g.pl[0].miles, 700, 'ext: the miles stand');
+
+  { stop: the match ends with the trip complete at 700 }
+  FreshPlay(g);
+  SetHand(g, 0, ck100, ck25, ck25, ck25, ck25, ck25);
+  g.pl[0].battle := rmGo; g.pl[0].miles := 600;
+  DoPlay(g, 1, tgSelf, err);
+  ResolveExtension(g, false);
+  Check(g.ph = phOver, 'ext: stopping ends the match');
+  CheckEq(g.tripBy, 0, 'ext: the trip is complete for the player who stopped');
+  CheckEq(HandPoints(g, 0), 700 + 400 + 300 + 500, 'ext: miles + trip + safe trip + shutout');
+  CheckEq(CheckInvariants(g), 0, 'ext: the finished state is consistent');
+
+  { passing 700 without landing on it does not ask }
+  FreshPlay(g);
+  SetHand(g, 0, ck75, ck25, ck25, ck25, ck25, ck25);
+  g.pl[0].battle := rmGo; g.pl[0].miles := 650;
+  DoPlay(g, 1, tgSelf, err);
+  Check(g.ph = phDraw, 'ext: 650+75 = 725 just passes 700 with no question');
+
+  { a 200 can land on 700 too }
+  FreshPlay(g);
+  SetHand(g, 0, ck200, ck25, ck25, ck25, ck25, ck25);
+  g.pl[0].battle := rmGo; g.pl[0].miles := 500;
+  DoPlay(g, 1, tgSelf, err);
+  Check(g.ph = phExtend, 'ext: 500+200 = 700 asks as well');
+
+  { having extended, you are never asked again }
+  FreshPlay(g);
+  SetHand(g, 0, ck25, ck25, ck25, ck25, ck25, ck25);
+  g.pl[0].battle := rmGo; g.pl[0].miles := 675; g.pl[0].extended := true;
+  DoPlay(g, 1, tgSelf, err);
+  Check(g.ph = phDraw, 'ext: an extended player is not asked again at 700');
+
+  { completing the extension earns the bonus; finishing at 1000 without one does not }
+  FreshPlay(g);
+  SetHand(g, 0, ck25, ck25, ck25, ck25, ck25, ck25);
+  g.pl[0].battle := rmGo; g.pl[0].miles := 975; g.pl[0].extended := true;
+  DoPlay(g, 1, tgSelf, err);
+  Check(g.ph = phOver, 'ext: an extended trip still finishes at exactly 1000');
+  CheckEq(HandPoints(g, 0), 1000 + 400 + 200 + 300 + 500, 'ext: the extension adds 200');
+  FreshPlay(g);
+  SetHand(g, 0, ck25, ck25, ck25, ck25, ck25, ck25);
+  g.pl[0].battle := rmGo; g.pl[0].miles := 975;
+  DoPlay(g, 1, tgSelf, err);
+  CheckEq(HandPoints(g, 0), 1000 + 400 + 300 + 500, 'ext: no extension bonus without extending');
+
+  { the extension bonus belongs to the winner only }
+  g.pl[1].extended := true;
+  CheckEq(HandPoints(g, 1), 0, 'ext: the loser gets nothing for being extended')
+end;
+
+procedure TestAIExtend;
+begin
+  FreshPlay(g);
+  g.pl[0].miles := 700;
+  g.pl[1].miles := 400;
+  g.ph := phExtend; g.extSeat := 0;
+  Check(AIExtend(g), 'ai ext: a 300-mile lead extends');
+  g.pl[1].miles := 450;
+  Check(AIExtend(g), 'ai ext: a 250-mile lead extends');
+  g.pl[1].miles := 475;
+  Check(not AIExtend(g), 'ai ext: a 225-mile lead takes the sure win and stops');
+  g.pl[1].miles := 650;
+  Check(not AIExtend(g), 'ai ext: a close opponent means stop now');
+  g.extSeat := 1;
+  g.pl[1].miles := 700;
+  g.pl[0].miles := 300;
+  Check(AIExtend(g), 'ai ext: works for either seat')
+end;
+
 procedure TestScoring;
 begin
   NewGame(g, 3);
@@ -639,6 +730,8 @@ begin
   TestCanPlayAny;
   TestCuredHazardStaysCured;
   TestScoring;
+  TestExtension;
+  TestAIExtend;
   TestLegalMoves;
   TestAI;
   TestCoupRoWCures;

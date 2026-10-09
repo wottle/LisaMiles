@@ -151,79 +151,79 @@ The computer attacked you with:
 939
 The computer discarded:
 
-; -- 941..959: card captions (940 + the card's position in MilesLogic.CardKind).
+; -- 971..989: card captions (970 + the card's position in MilesLogic.CardKind).
 ;    Keep them short: they must fit inside a 54-pixel-wide card.
-941
+971
 MILES
 
-942
+972
 MILES
 
-943
+973
 MILES
 
-944
+974
 MILES
 
-945
+975
 MILES
 
-946
+976
 CRASH
 
-947
+977
 NO GAS
 
-948
+978
 FLAT
 
-949
+979
 LIMIT 50
 
-950
+980
 STOP
 
-951
+981
 REPAIR
 
-952
+982
 GAS
 
-953
+983
 SPARE
 
-954
+984
 END LIM
 
-955
+985
 GO
 
-956
+986
 ACE
 
-957
+987
 TANK
 
-958
+988
 TIRES
 
-959
+989
 R.O.W.
 
-; -- 960..964: labels (964 is the Next Match button).
-960
+; -- 990..994: labels (994 is the Next Match button).
+990
 COMPUTER
 
-961
+991
 YOU
 
-962
+992
 mi
 
-963
+993
 Scores
 
-964
+994
 Next Match
 
 0
