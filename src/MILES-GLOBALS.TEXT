@@ -55,6 +55,7 @@ const
 
    phStatusBase  = 910;     { status text = 910 + a status code (an Err or Msg code) }
    phCardBase    = 970;     { card caption = 970 + ord(card kind) }
+   phDescBase    = 950;     { what the card does = 950 + ord(card kind) }
    phComputer    = 990;
    phYou         = 991;
    phMiles       = 992;
@@ -93,6 +94,7 @@ var
 procedure NumToStr (n : longint; var s : Str255);
 procedure GetPhrase (n : integer; var s : Str255);
 procedure LoadCaptions;
+procedure FitCaption (var raw : Str255; room : integer; var out : Str255);
 procedure HandleFilerOp (var wantsOpen : boolean);
 procedure InitClockCal;
 procedure CalibrateClock;
@@ -174,6 +176,41 @@ procedure GetPhrase {n : integer; var s : Str255};
 begin
    s := '';
    GetAlert(allAlerts, n, @s)
+end;
+
+{ A caption phrase lists alternatives separated by '|', longest first.  Pick the first one that  }
+{ is no wider than room pixels in the current font ('' if none fits).  With a huge room that is  }
+{ the card's full name.                                                                          }
+procedure FitCaption {var raw : Str255; room : integer; var out : Str255};
+var rest, part : Str255;
+    i          : integer;
+    more       : boolean;
+begin
+   out := '';
+   rest := raw;
+   more := length(rest) > 0;
+   while more do begin
+      part := '';
+      i := 1;
+      while (i <= length(rest)) and (rest[i] <> '|') do begin
+         part := concat(part, ' ');
+         part[length(part)] := rest[i];
+         i := i + 1
+      end;
+      if (length(out) = 0) and (StringWidth(part) <= room) then out := part;
+      if i > length(rest) then more := false
+      else begin
+         { drop the alternative just read and the bar after it }
+         i := i + 1;
+         part := '';
+         while i <= length(rest) do begin
+            part := concat(part, ' ');
+            part[length(part)] := rest[i];
+            i := i + 1
+         end;
+         rest := part
+      end
+   end
 end;
 
 procedure LoadCaptions;

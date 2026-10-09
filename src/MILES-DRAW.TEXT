@@ -49,7 +49,6 @@ const
 var
    miPix  : array [1..15, 0..71] of integer;   { the card pictures, as QuickDraw bitmaps }
    miWhole  : Rect;        { the whole content area: the clip restored after each card }
-   miSpeed: longint;     { TEMPORARY: clock speed as last shown in the status line }
    shownG    : Game;        { the game state as last painted }
    shownU    : UIState;     { the UI state as last painted }
    haveShown : boolean;     { false until the first full paint }
@@ -69,7 +68,6 @@ end;
 procedure InitDraw {};
 begin
    haveShown := false;
-   miSpeed := 0;
    SetRect(miWhole, 0, 0, ContentW, ContentH);
    FillIcons
 end;
@@ -143,7 +141,7 @@ begin
    ClipRect(r);
    TextMode(srcOr);
    TextFace([]);
-   room := (r.right - r.left) - 8;
+   room := (r.right - r.left) - 6;               { the widest caption that still sits inside the frame }
    if IsDistance(k) then begin
       FrameRect(r);
       TextFont(fntBig);
@@ -156,14 +154,14 @@ begin
       ShowIcon(IconOf(k), r.left + 9, r.top + 4);
       TextFont(fntCaption);
       GetFontInfo(fi);
-      s := capText[k];
+      FitCaption(capText[k], room, s);                      { the longest caption that fits }
       if IsSafety(k) then begin
          PenSize(2, 2);
          FrameRect(r);
          PenNormal;
          SetRect(band, r.left + 2, r.bottom - 15, r.right - 2, r.bottom - 2);
          PaintRect(band);
-         if StringWidth(s) <= room then begin
+         if length(s) > 0 then begin
             TextMode(srcBic);                              { white text on the black band }
             CenterString(r, band.bottom - 2 - fi.descent, s);
             TextMode(srcOr)
@@ -176,7 +174,7 @@ begin
             InsetRect(inner, 3, 3);
             FrameRect(inner)
          end;
-         if StringWidth(s) <= room then
+         if length(s) > 0 then
             CenterString(r, r.bottom - 5 - fi.descent, s);
          if IsHazard(k) then
             InvertRect(r)                                  { hazards are black cards }
@@ -400,23 +398,17 @@ begin
    EraseRect(r);
    code := StatusMsg(ui, theGame);
    GetPhrase(phStatusBase + code, s);
+   if (code = MsgYourPlay) and (ui.sel >= 1) then      { a card is selected: say what it is and does }
+      GetPhrase(phDescBase + ord(theGame.pl[0].hand[ui.sel]), s);
    if (code >= MsgCpuPlayed) and (code <= MsgCpuDiscard) then begin
-      t := capText[ui.lastCard];
+      FitCaption(capText[ui.lastCard], 9999, t);
       s := concat(s, ' ', t)
    end;
    TextFont(fntCaption);
    TextMode(srcOr);
    TextFace([]);
    MoveTo(8, statusTextY);
-   DrawString(s);
-   { TEMPORARY DIAGNOSTIC: measured clock speed (100 = stock) and the double-click window in clock units }
-   NumToStr(unitsPerSec, s);
-   t := concat('clk=', s);
-   NumToStr(ScaleUnits(clickDelay), s);
-   t := concat(t, ' dbl=', s);
-   MoveTo(500, statusTextY);
-   DrawString(t);
-   miSpeed := unitsPerSec
+   DrawString(s)
 end;
 
 procedure Remember;
@@ -510,7 +502,7 @@ begin
    if handChanged then DrawHandStrip;
 
    if (StatusMsg(shownU, shownG) <> StatusMsg(ui, theGame)) or (shownU.lastCard <> ui.lastCard) or
-      (miSpeed <> unitsPerSec) then
+      (shownU.sel <> ui.sel) then
       DrawStatusText;
 
    Remember

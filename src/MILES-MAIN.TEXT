@@ -114,8 +114,8 @@ var ev   : UIEvent;
     sf   : CardKind;
 begin
    sf := SafetyFor(theGame.coupHazard);
-   h := capText[theGame.coupHazard];
-   f := capText[sf];
+   FitCaption(capText[theGame.coupHazard], 9999, h);     { the full name of each card }
+   FitCaption(capText[sf], 9999, f);
    ParamAlert(h, f, '');
    if CautionAlert(allAlerts, alrtCoup) then
       UICoupAnswer(ui, theGame, true, ev)

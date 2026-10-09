@@ -181,8 +181,68 @@ The computer reached 700 miles and is going on to 1000!
 941
 The game is over.  Choose New Game from the Game menu.
 
-; -- 971..989: card captions (970 + the card's position in MilesLogic.CardKind).
-;    Keep them short: they must fit inside a 54-pixel-wide card.
+; -- 951..969: what each card does, shown in the status line when it is selected
+;    (950 + the card's position in MilesLogic.CardKind).
+951
+Distance: play it on your side to travel that far.  You need a Go first.
+
+952
+Distance: play it on your side to travel that far.  You need a Go first.
+
+953
+Distance: play it on your side to travel that far.  You need a Go first.
+
+954
+Distance: play it on your side to travel that far.  You need a Go first.
+
+955
+Distance: play it on your side to travel that far.  You need a Go first.
+
+956
+ACCIDENT: stops the computer until it plays Repairs.  Click its side.
+
+957
+OUT OF GAS: stops the computer until it plays Gasoline.  Click its side.
+
+958
+FLAT TIRE: stops the computer until it plays a Spare Tire.  Click its side.
+
+959
+SPEED LIMIT: the computer can only play 50 or less until End of Limit.
+
+960
+STOP: the computer cannot move until it plays a Go.  Click its side.
+
+961
+REPAIRS: fixes your Accident.  You still need a Go to move again.
+
+962
+GASOLINE: fixes your Out of Gas.  You still need a Go to move again.
+
+963
+SPARE TIRE: fixes your Flat Tire.  You still need a Go to move again.
+
+964
+END OF LIMIT: cancels your Speed Limit so you can play any distance.
+
+965
+GO: you need one to start, and again after a Stop or any repair.
+
+966
+ACE DRIVER: protects you from Accidents for good.  Another turn.
+
+967
+EXTRA TANK: protects you from Out of Gas for good.  Another turn.
+
+968
+TOUGH TIRES: protects you from Flat Tires for good.  Another turn.
+
+969
+RIGHT OF WAY: protects against Stop and Speed Limit, and acts as Go.
+
+; -- 971..989: card captions (970 + the card's position in MilesLogic.CardKind).  Each is a list of
+;    alternatives separated by '|', longest first: the first one that fits inside the card is drawn.
+;    The FIRST alternative is the card's full name, used in messages.
 971
 MILES
 
@@ -199,46 +259,46 @@ MILES
 MILES
 
 976
-CRASH
+ACCIDENT|CRASH
 
 977
-NO GAS
+OUT OF GAS|NO GAS|EMPTY
 
 978
-FLAT
+FLAT TIRE|FLAT
 
 979
-LIMIT 50
+SPEED LIMIT|LIMIT 50|LIMIT
 
 980
 STOP
 
 981
-REPAIR
+REPAIRS|FIX
 
 982
-GAS
+GASOLINE|GAS
 
 983
-SPARE
+SPARE TIRE|SPARE
 
 984
-END LIM
+END OF LIMIT|END LIMIT|NO LIMIT|END 50|END
 
 985
 GO
 
 986
-ACE
+ACE DRIVER|ACE
 
 987
-TANK
+EXTRA TANK|TANK
 
 988
-TIRES
+TOUGH TIRES|TIRES
 
 989
-R.O.W.
+RIGHT OF WAY|R.O.W.
 
 ; -- 990..994: labels (994 is the Next Match button).
 990
