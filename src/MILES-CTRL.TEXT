@@ -41,7 +41,7 @@ procedure UIInit(var u: UIState);
 procedure UINewHand(var u: UIState; var g: Game; seed: longint);
 procedure UINewGame(var u: UIState; var g: Game; seed: longint);
 procedure UINextHand(var u: UIState; var g: Game);
-{ now = the event's time and dblDelay = the double-click interval, both in the same units (hundredths of a second on the Lisa). }
+{ now = the event's time, dblDelay = the double-click interval: the same units (hundredths of a second). }
 procedure UIClick(var u: UIState; var g: Game; x, y: integer; now, dblDelay: longint; var ev: UIEvent);
 procedure UIAdvance(var u: UIState; var g: Game; var ev: UIEvent);
 procedure UICoupAnswer(var u: UIState; var g: Game; useCoup: boolean; var ev: UIEvent);
@@ -78,8 +78,8 @@ begin
   NewGame(g, seed)
 end;
 
-{ Next Match: deal again, keeping the running scores.  The seed comes from the finished deal's generator so }
-{ every match differs, with no clock needed (and the whole thing stays reproducible in tests).            }
+{ Next Match: deal again, keeping the running scores.  The seed comes from the finished deal's     }
+{ generator, so every match differs with no clock needed, and tests stay reproducible.            }
 procedure UINextHand(var u: UIState; var g: Game);
 begin
   u.hands := u.hands + 1;
@@ -114,7 +114,8 @@ begin
   end
 end;
 
-{ What follows ANY successful human play: clear the selection; the computer answers a Coup at once; score a finished match. }
+{ After ANY successful human play: clear the selection, let the computer answer a Coup at once,   }
+{ and score a finished match.                                                                      }
 procedure HumanPlayed(var u: UIState; var g: Game; var ev: UIEvent);
 begin
   u.sel := 0;
@@ -127,9 +128,9 @@ begin
   Finish(u, g, ev)
 end;
 
-{ Double-click: play hand card i on its natural target if it can be played at all -- on you first, else on the }
-{ computer (hazards).  It NEVER discards, so a slip cannot throw a card away.  If it cannot be played the card   }
-{ stays selected and the reason is shown.                                                                      }
+{ Double-click: play hand card i where it belongs if it can be played at all: on you first, else on  }
+{ the computer (hazards).  It NEVER discards, so a slip cannot throw a card away.  If it cannot be   }
+{ played, the card stays selected and the reason is shown.                                          }
 procedure AutoPlay(var u: UIState; var g: Game; i: integer; var ev: UIEvent);
 var err, errSelf, errOpp: integer; k: CardKind;
 begin
