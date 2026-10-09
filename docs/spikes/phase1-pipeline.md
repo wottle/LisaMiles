@@ -73,3 +73,11 @@ Files to send with the transfer script (it turns `-` into `/`): `src/MILES-LOGIC
   enumeration `for` loops, `string[63]` sized strings, a boolean constant, 16-bit integers with longint
   arithmetic, `exit`-free control flow.
 - Not yet verified on the Lisa: running the code (no UI yet), so behaviour is covered only by the Mac tests.
+
+## Phase 3: portable UI units on the Lisa (Checkpoint 0, 2026-10-09)
+- `MILES/LAYOUT` compiled with no errors on the first try.
+- `MILES/CTRL` first failed with "identifier declared twice" on `MsgComputerCoup`: **Lisa Pascal treats
+  identifiers that agree in their first 8 characters as the same name** (`MsgComputerTurn`/`MsgComputerCoup`).
+  Renamed to `MsgCpuCoup`; `tools/lint_lisa_subset.py --collisions` now checks every unit together
+  (it also caught `DrawCard` vs `DrawCardFace`/`DrawCardBack` in the not-yet-written drawing unit).
+- After the rename `MILES/CTRL` compiled with no errors.
