@@ -31,6 +31,8 @@ type
     msg        : integer;                 { a message to show until the next action, or MsgNone }
     handScored : boolean;                 { this hand's points are already in match[] }
     hands      : integer;                 { matches dealt since the last New Game }
+    lastClkAt  : longint;                 { time of the previous click on a hand card }
+    lastClkIdx : integer;                 { which hand card it was, 0 = none (breaks any pair) }
     lastCard   : CardKind;                { the card the computer last played or threw away }
     match      : array[0..1] of longint;  { running match totals }
   end;
@@ -39,7 +41,8 @@ procedure UIInit(var u: UIState);
 procedure UINewHand(var u: UIState; var g: Game; seed: longint);
 procedure UINewGame(var u: UIState; var g: Game; seed: longint);
 procedure UINextHand(var u: UIState; var g: Game);
-procedure UIClick(var u: UIState; var g: Game; x, y: integer; var ev: UIEvent);
+{ now = the event's time, dblDelay = the double-click interval: the same units (hundredths of a second). }
+procedure UIClick(var u: UIState; var g: Game; x, y: integer; now, dblDelay: longint; var ev: UIEvent);
 procedure UIAdvance(var u: UIState; var g: Game; var ev: UIEvent);
 procedure UICoupAnswer(var u: UIState; var g: Game; useCoup: boolean; var ev: UIEvent);
 function  NaturalSlot(k: CardKind): integer;
@@ -53,6 +56,8 @@ begin
   u.msg := MsgNone;
   u.handScored := false;
   u.hands := 0;
+  u.lastClkAt := 0;
+  u.lastClkIdx := 0;
   u.lastCard := ckNone;
   u.match[0] := 0;
   u.match[1] := 0
@@ -73,11 +78,12 @@ begin
   NewGame(g, seed)
 end;
 
-{ Next Match: deal again, keeping the running scores.  The seed comes from the finished deal's generator so }
-{ every match differs, with no clock needed (and the whole thing stays reproducible in tests).            }
+{ Next Match: deal again, keeping the running scores.  The seed comes from the finished deal's     }
+{ generator, so every match differs with no clock needed, and tests stay reproducible.            }
 procedure UINextHand(var u: UIState; var g: Game);
 begin
   u.hands := u.hands + 1;
+  u.lastClkIdx := 0;
   u.sel := 0;
   u.msg := MsgNone;
   u.handScored := false;
@@ -108,10 +114,51 @@ begin
   end
 end;
 
-procedure UIClick(var u: UIState; var g: Game; x, y: integer; var ev: UIEvent);
-var hit: HitInfo; err: integer; t: Target;
+{ After ANY successful human play: clear the selection, let the computer answer a Coup at once,   }
+{ and score a finished match.                                                                      }
+procedure HumanPlayed(var u: UIState; var g: Game; var ev: UIEvent);
+begin
+  u.sel := 0;
+  u.msg := MsgNone;
+  ev := ueMoved;
+  if g.ph = phCoup then begin           { the computer is the victim: it always answers }
+    ResolveCoup(g, true);
+    u.msg := MsgCpuCoup
+  end;
+  Finish(u, g, ev)
+end;
+
+{ Double-click: play hand card i where it belongs if it can be played at all: on you first, else on  }
+{ the computer (hazards).  It NEVER discards, so a slip cannot throw a card away.  If it cannot be   }
+{ played, the card stays selected and the reason is shown.                                          }
+procedure AutoPlay(var u: UIState; var g: Game; i: integer; var ev: UIEvent);
+var err, errSelf, errOpp: integer; k: CardKind;
+begin
+  k := g.pl[0].hand[i];
+  errSelf := CheckPlay(g, i, tgSelf);
+  errOpp := CheckPlay(g, i, tgOpponent);
+  if errSelf = ErrOK then begin
+    DoPlay(g, i, tgSelf, err);
+    HumanPlayed(u, g, ev)
+  end
+  else if errOpp = ErrOK then begin
+    DoPlay(g, i, tgOpponent, err);
+    HumanPlayed(u, g, ev)
+  end
+  else begin
+    u.sel := i;
+    if IsHazard(k) then u.msg := errOpp else u.msg := errSelf;
+    ev := ueRejected
+  end
+end;
+
+procedure UIClick(var u: UIState; var g: Game; x, y: integer; now, dblDelay: longint; var ev: UIEvent);
+var hit: HitInfo; err: integer; t: Target; wasIdx: integer; wasAt: longint;
 begin
   ev := ueNone;
+  wasIdx := u.lastClkIdx;
+  wasAt := u.lastClkAt;
+  u.lastClkIdx := 0;                    { only a click on a hand card (below) can start a pair }
   if g.ph = phOver then begin
     HitTest(x, y, 0, 0, hit);
     if hit.kind = hkNext then begin
@@ -135,13 +182,19 @@ begin
     HitTest(x, y, g.pl[0].handN, u.sel, hit);
     if hit.kind = hkHand then begin
       u.msg := MsgNone;
-      if hit.index = u.sel then begin
-        u.sel := 0;
-        ev := ueDeselect
-      end
+      if (hit.index = wasIdx) and (now >= wasAt) and (now - wasAt < dblDelay) then
+        AutoPlay(u, g, hit.index, ev)   { a double click: play the card }
       else begin
-        u.sel := hit.index;
-        ev := ueSelect
+        u.lastClkIdx := hit.index;
+        u.lastClkAt := now;
+        if hit.index = u.sel then begin
+          u.sel := 0;
+          ev := ueDeselect
+        end
+        else begin
+          u.sel := hit.index;
+          ev := ueSelect
+        end
       end
     end
     else if hit.kind = hkDraw then begin
@@ -158,16 +211,8 @@ begin
         else if hit.kind = hkOpp then t := tgOpponent
         else t := tgDiscard;
         DoPlay(g, u.sel, t, err);
-        if err = ErrOK then begin
-          u.sel := 0;
-          u.msg := MsgNone;
-          ev := ueMoved;
-          if g.ph = phCoup then begin       { the computer is the victim: it always answers }
-            ResolveCoup(g, true);
-            u.msg := MsgCpuCoup
-          end;
-          Finish(u, g, ev)
-        end
+        if err = ErrOK then
+          HumanPlayed(u, g, ev)
         else begin
           u.msg := err;
           ev := ueRejected

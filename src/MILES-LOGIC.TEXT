@@ -378,9 +378,10 @@ begin
   CanPlayAny := found
 end;
 
-{ RULE R5 (as amended after the first playtest): give the turn to seat nxt.  While the draw pile lasts that is   }
-{ simply a draw.  Once it is empty there is nothing to draw and discarding is pointless, so a player with no   }
-{ real play is skipped, and when NEITHER player has one the hand is over.                                       }
+{ RULE R5 (as amended after the first playtest): give the turn to seat nxt.  While the draw pile   }
+{ lasts that is simply a draw.  Once it is empty there is nothing to draw and discarding is        }
+{ pointless, so a player with no real play is skipped, and when NEITHER player has one the hand    }
+{ is over.                                                                                         }
 procedure PassTo(var g: Game; nxt: integer);
 begin
   if g.deckNext <= NumCards then begin
