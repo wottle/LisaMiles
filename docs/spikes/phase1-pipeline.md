@@ -39,3 +39,23 @@ Files to send with the transfer script (it turns `-` into `/`): `src/MILES-LOGIC
 3. Paste the full compiler output here: ______
 4. If anything is rejected, send the exact error text back: the fix is made in `MILES-LOGIC.TEXT`,
    re-verified on the Mac (`make all`), and a rule is added to `tools/lint_lisa_subset.py`.
+
+## Findings from the first hardware session (2026-10-09)
+- `LOS Compilation Base.image` (author's 50 MB image) fails to boot on this LisaFPGA at both 15 MHz and
+  5 MHz: Level 7 interrupt + system error 10738. Copy on the SD card is byte-identical (SHA-256 0997069...aea00).
+  Stock images, including `Lisa Office System 3.0 and Workshop 3.0.image`, boot fine.
+- Workaround that works: boot the stock Workshop 3.0 image, set Preferences > Connect Device Software >
+  Serial B = "Serial cable", then use the Workshop `T` (TransferProgram) to receive text files over Serial B
+  (9600 baud, parity none, full duplex, Receive All Text). Mac side: `tools/lisa_send_text.py`.
+  Used this to get `ALEX/TRANSFER.TEXT` and `ALEX/RECEIVE.TEXT` onto the Lisa; `RECEIVE` compiled
+  (`P`, third prompt is the OBJECT file) and linked (`L`: `ALEX/RECV`, `IOSPASLIB`, output `ALEX/RECEIVE`).
+- LisaFPGA Serial B over USB (`LisaFPGA Serial B`, /dev/cu.usbserial-140) after `<ALEX/TRANSFER` (console moved to
+  Serial B, 28800 baud, DTR handshakes): the Lisa transmits ONLY when the Mac drives RTS=1 and DTR=0
+  (pyserial's default DTR=1 mutes it). CTS/DSR/CD/RI always read 0. The Minesweeper script waits on DSR, so it
+  stalls; a patched copy (RTS=1, DTR=0, selectable flow control) got the Lisa to print its
+  `SYSTEM-MGR:` prompt, but the Lisa redraws that prompt for ANY received byte (q, Q, ?, CR) and never acts on
+  commands, and keys pressed on the Lisa keyboard produced nothing on the serial line. Mac -> Lisa command input
+  over the exec-configured console is therefore NOT working; cause unknown (ask the LisaFPGA/Minesweeper author).
+- Do NOT run a transfer script that sends file contents when the Lisa has not acknowledged: it types the
+  file into whatever prompt is showing. (The script continues after its own warnings.)
+- Error 130 "Could not open program file" came from running `ALEX/TRANSFER` without the `<` prefix.
