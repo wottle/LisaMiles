@@ -420,6 +420,65 @@ begin
   CheckEq(HandPoints(g, 0), 1000 + 400 + 300 + 300 + 500, 'score: shutout bonus')
 end;
 
+procedure TestLegalMoves;
+var ml: MoveList; i: integer;
+begin
+  FreshPlay(g);
+  SetHand(g, 0, ck25, rmGo, hzStop, sfAce, ck50, ck25);
+  LegalMoves(g, ml);
+  Check(ml.n >= 6, 'every card can at least be discarded');
+  for i := 1 to ml.n do
+    CheckEq(CheckPlay(g, ml.m[i].hand, ml.m[i].tgt), ErrOK, 'listed move is legal');
+  g.ph := phDraw;
+  LegalMoves(g, ml);
+  CheckEq(ml.n, 0, 'no moves outside the play phase');
+  CheckEq(CheckInvariants(g), 0, 'fresh game satisfies invariants')
+end;
+
+procedure TestAI;
+var mv: PlayMove;
+begin
+  FreshPlay(g);
+  SetHand(g, 0, ck100, rmRepairs, ck25, hzStop, sfTank, ck50);
+  g.pl[0].battle := hzAccident;
+  AIChoose(g, mv);
+  CheckEq(mv.hand, 2, 'AI cures its accident first');
+  Check(mv.tgt = tgSelf, 'AI cures on itself');
+
+  FreshPlay(g);
+  SetHand(g, 0, ck100, rmRepairs, ck25, hzStop, sfAce, ck50);
+  g.pl[0].battle := hzAccident;
+  AIChoose(g, mv);
+  CheckEq(mv.hand, 5, 'AI uses the matching safety instead of repairs (immunity + extra turn)');
+
+  FreshPlay(g);
+  SetHand(g, 0, ck100, ck25, rmGo, hzStop, ck75, ck50);
+  g.pl[0].battle := rmGo;
+  g.pl[0].miles := 975;
+  AIChoose(g, mv);
+  CheckEq(mv.hand, 2, 'AI takes the winning 25');
+
+  FreshPlay(g);
+  SetHand(g, 0, ck100, ck25, rmGo, hzStop, ck75, ck50);
+  g.pl[0].battle := hzStop;
+  AIChoose(g, mv);
+  CheckEq(mv.hand, 3, 'AI plays Go when stopped');
+
+  FreshPlay(g);
+  SetHand(g, 0, hzAccident, ck25, ck25, ck25, ck25, ck25);
+  g.pl[0].battle := rmGo;
+  g.pl[1].battle := rmGo;
+  AIChoose(g, mv);
+  CheckEq(mv.hand, 1, 'AI attacks a moving opponent');
+  Check(mv.tgt = tgOpponent, 'AI attack targets the opponent');
+
+  FreshPlay(g);
+  SetHand(g, 0, sfAce, ck25, hzStop, hzStop, hzStop, hzStop);
+  g.pl[0].battle := rmGo;
+  AIChoose(g, mv);
+  CheckEq(mv.hand, 2, 'AI prefers mileage to spending a safety early')
+end;
+
 {@TESTS}
 
 begin
@@ -438,6 +497,8 @@ begin
   TestWin;
   TestDeckEmpty;
   TestScoring;
+  TestLegalMoves;
+  TestAI;
   {@CALLS}
   Summary
 end.

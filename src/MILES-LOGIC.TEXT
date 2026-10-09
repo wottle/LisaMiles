@@ -87,6 +87,10 @@ procedure DrawCard(var g: Game);
 procedure DoPlay(var g: Game; handIdx: integer; t: Target; var err: integer);
 procedure ResolveCoup(var g: Game; useCoup: boolean);
 function  HandPoints(var g: Game; s: integer): longint;
+procedure LegalMoves(var g: Game; var ml: MoveList);
+procedure AIChoose(var g: Game; var mv: PlayMove);
+procedure RandomChoose(var g: Game; var mv: PlayMove);
+function  CheckInvariants(var g: Game): integer;
 {@IFACE}
 
 implementation
@@ -498,6 +502,104 @@ begin
     if g.pl[Opp(s)].miles = 0 then pts := pts + PtShutout
   end;
   HandPoints := pts
+end;
+
+procedure LegalMoves(var g: Game; var ml: MoveList);
+var i: integer; t: Target;
+begin
+  ml.n := 0;
+  if g.ph = phPlay then
+    for i := 1 to g.pl[g.turn].handN do
+      for t := tgSelf to tgDiscard do
+        if CheckPlay(g, i, t) = ErrOK then begin
+          ml.n := ml.n + 1;
+          ml.m[ml.n].hand := i;
+          ml.m[ml.n].tgt := t
+        end
+end;
+
+function DiscardValue(k: CardKind): integer;
+begin
+  if IsSafety(k) then DiscardValue := -50
+  else if IsHazard(k) then DiscardValue := 5
+  else if IsRemedy(k) then DiscardValue := 7
+  else DiscardValue := 6
+end;
+
+function SafetyValue(var g: Game; s: integer; k: CardKind): integer;
+var needed: boolean;
+begin
+  needed := false;
+  if (k = sfAce) and (g.pl[s].battle = hzAccident) then needed := true;
+  if (k = sfTank) and (g.pl[s].battle = hzOutOfGas) then needed := true;
+  if (k = sfPunct) and (g.pl[s].battle = hzFlat) then needed := true;
+  if (k = sfRoW) and ((g.pl[s].battle = hzStop) or g.pl[s].limited) then needed := true;
+  if needed then SafetyValue := 100
+  else if g.deckNext > NumCards then SafetyValue := 85    { no coup chances left: bank it }
+  else SafetyValue := 20                                    { hold it for a coup fourre }
+end;
+
+{ Priority: cure > win > Go > mileage > attack > end limit > hold safety > discard. }
+function MoveValue(var g: Game; var mv: PlayMove): integer;
+var s, v: integer; k: CardKind;
+begin
+  s := g.turn;
+  k := g.pl[s].hand[mv.hand];
+  if mv.tgt = tgDiscard then MoveValue := DiscardValue(k)
+  else if mv.tgt = tgOpponent then begin
+    if k = hzLimit then MoveValue := 55
+    else if k = hzStop then MoveValue := 70
+    else MoveValue := 75
+  end
+  else if IsDistance(k) then begin
+    v := DistValue(k);
+    if g.pl[s].miles + v = TripMiles then MoveValue := 99
+    else if k = ck200 then MoveValue := 30
+    else MoveValue := 40 + v div 5
+  end
+  else if IsSafety(k) then MoveValue := SafetyValue(g, s, k)
+  else if k = rmGo then MoveValue := 92
+  else if k = rmEndLimit then MoveValue := 60
+  else MoveValue := 95
+end;
+
+procedure AIChoose(var g: Game; var mv: PlayMove);
+var ml: MoveList; i, best, bv, v: integer;
+begin
+  LegalMoves(g, ml);
+  best := 1;
+  bv := -1000;
+  for i := 1 to ml.n do begin
+    v := MoveValue(g, ml.m[i]);
+    if v > bv then begin
+      bv := v;
+      best := i
+    end
+  end;
+  mv := ml.m[best]
+end;
+
+procedure RandomChoose(var g: Game; var mv: PlayMove);
+var ml: MoveList;
+begin
+  LegalMoves(g, ml);
+  mv := ml.m[1 + RandBelow(g, ml.n)]
+end;
+
+{ Returns 0 when the game state is self-consistent, else a code identifying the problem. }
+function CheckInvariants(var g: Game): integer;
+var p, tot, r: integer;
+begin
+  r := 0;
+  tot := RemainingDeck(g);
+  for p := 0 to 1 do begin
+    tot := tot + g.pl[p].handN;
+    if (g.pl[p].handN < 0) or (g.pl[p].handN > 7) then r := 1;
+    if (g.pl[p].miles < 0) or (g.pl[p].miles > TripMiles) then r := 2;
+    if (g.pl[p].n200 < 0) or (g.pl[p].n200 > Max200) then r := 3
+  end;
+  if tot + g.gone <> NumCards then r := 4;
+  CheckInvariants := r
 end;
 
 {@IMPL}
