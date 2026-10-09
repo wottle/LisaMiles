@@ -63,7 +63,7 @@ const
    aiDelay = 60;            { hundredths of a second between the computer's moves }
 
 type
-   CapStr = string[15];
+   CapStr = Str255;         { the SAME type GetAlert fills; a copy into string[15] came back empty }
 
 var
    theEvent  : EventRecord;
@@ -120,16 +120,14 @@ end;
 
 procedure LoadCaptions;
 var k : CardKind;
-    t : Str255;
 begin
    for k := ck25 to sfRoW do begin
-      GetPhrase(phCardBase + ord(k), t);
-      capText[k] := copy(t, 1, 15)
+      GetPhrase(phCardBase + ord(k), capText[k])
    end;
-   GetPhrase(phComputer, t);  lblComputer := copy(t, 1, 15);
-   GetPhrase(phYou, t);       lblYou      := copy(t, 1, 15);
-   GetPhrase(phMiles, t);     lblMiles    := copy(t, 1, 15);
-   GetPhrase(phMatch, t);     lblMatch    := copy(t, 1, 15)
+   GetPhrase(phComputer, lblComputer);
+   GetPhrase(phYou, lblYou);
+   GetPhrase(phMiles, lblMiles);
+   GetPhrase(phMatch, lblMatch)
 end;
 
 { The Filer protocol.  EVERY Filer command must be answered, or the whole desktop      }

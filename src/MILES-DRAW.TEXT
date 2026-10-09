@@ -306,10 +306,9 @@ var s, t, u : Str255;
 begin
    NumToStr(length(lblYou), s);
    u := concat('lbl=', s);
-   GetPhrase(960, t);  NumToStr(length(t), s);  u := concat(u, ' p960=', s);
-   GetPhrase(941, t);  NumToStr(length(t), s);  u := concat(u, ' p941=', s);
+   NumToStr(length(capText[ck25]), s);  u := concat(u, ' cap25=', s);
+   GetPhrase(961, t);  NumToStr(length(t), s);  u := concat(u, ' p961=', s);
    GetPhrase(930, t);  NumToStr(length(t), s);  u := concat(u, ' p930=', s);
-   GetPhrase(911, t);  NumToStr(length(t), s);  u := concat(u, ' p911=', s);
    TextFont(fntCaption);
    MoveTo(400, statusTextY);
    DrawString(u)
