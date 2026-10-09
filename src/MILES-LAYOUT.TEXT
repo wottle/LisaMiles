@@ -24,7 +24,7 @@ type
     left, top, right, bottom : integer;
   end;
 
-  HitKind = (hkNone, hkHand, hkDraw, hkDiscard, hkOwn, hkOpp);
+  HitKind = (hkNone, hkHand, hkDraw, hkDiscard, hkOwn, hkOpp, hkNext);
 
   HitInfo = record
     kind  : HitKind;
@@ -35,6 +35,7 @@ procedure SlotBox(seat, slot: integer; var b: Box);
 procedure HandBox(i: integer; lifted: boolean; var b: Box);
 procedure DrawPileBox(var b: Box);
 procedure DiscardBox(var b: Box);
+procedure NextBox(var b: Box);
 procedure OppHandBox(i: integer; var b: Box);
 procedure RegionBox(seat: integer; var b: Box);
 procedure BoxCenter(var b: Box; var x, y: integer);
@@ -101,6 +102,12 @@ begin
   SetBox(b, 68, MidRowY, 68 + CardW, MidRowY + CardH)
 end;
 
+{ The Next Match button, shown in the middle band when a match is over. }
+procedure NextBox(var b: Box);
+begin
+  SetBox(b, 330, 88, 470, 118)
+end;
+
 procedure OppHandBox(i: integer; var b: Box);
 var x: integer;
 begin
@@ -144,6 +151,10 @@ begin
   if hit.kind = hkNone then begin
     DiscardBox(b);
     if PointInBox(x, y, b) then hit.kind := hkDiscard
+  end;
+  if hit.kind = hkNone then begin
+    NextBox(b);
+    if PointInBox(x, y, b) then hit.kind := hkNext
   end;
   if hit.kind = hkNone then begin
     RegionBox(0, b);

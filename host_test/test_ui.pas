@@ -103,7 +103,19 @@ begin
   end;
   RegionBox(0, b); RegionBox(1, c);
   if Overlap(b, c) then ok := false;
-  Check(ok, 'layout: hit areas (hand, piles, both sides) never overlap')
+  Check(ok, 'layout: hit areas (hand, piles, both sides) never overlap');
+
+  ok := true;
+  NextBox(c);
+  if not Inside(c) then ok := false;
+  DrawPileBox(b); if Overlap(b, c) then ok := false;
+  DiscardBox(b); if Overlap(b, c) then ok := false;
+  for s := 0 to 1 do begin RegionBox(s, b); if Overlap(b, c) then ok := false end;
+  for i := 1 to 7 do begin
+    HandBox(i, false, b); if Overlap(b, c) then ok := false;
+    HandBox(i, true, b); if Overlap(b, c) then ok := false
+  end;
+  Check(ok, 'layout: the Next Match button lies inside the window and overlaps nothing else')
 end;
 
 procedure TestHitTest;
@@ -140,6 +152,9 @@ begin
     if h.kind <> hkOpp then ok := false
   end;
   Check(ok, 'hit: your piles are hkOwn, the computer''s piles are hkOpp');
+
+  NextBox(b); BoxCenter(b, x, y); HitTest(x, y, 6, 0, h);
+  Check(h.kind = hkNext, 'hit: the Next Match button');
 
   HitTest(2, 305, 6, 0, h);
   Check(h.kind = hkNone, 'hit: empty space hits nothing');
@@ -381,6 +396,93 @@ begin
   CheckEq(failures, 0, 'scripted: 300 whole games played by clicks alone, no refusals, invariants hold')
 end;
 
+procedure TestNextMatchButton;
+var ev: UIEvent; b: Box; before: longint;
+begin
+  FreshPlay;
+  NextBox(b); ClickBox(b, ev);
+  Check(ev = ueNone, 'next: the button does nothing while a match is in progress');
+
+  FreshPlay;
+  SetHand(g, 0, ck25, ck25, ck25, ck25, ck25, ck25);
+  g.pl[0].battle := rmGo;
+  g.pl[0].miles := 975;
+  ClickHand(1, ev);
+  ClickSlot(0, SlotMiles, ev);
+  Check(ev = ueHandOver, 'next: the match ends at 1000');
+  before := u.match[0];
+  CheckEq(before, 1000 + 400 + 300 + 500, 'next: and is scored');
+  ClickHand(1, ev);
+  Check(ev = ueNone, 'next: other clicks do nothing once the match is over');
+  NextBox(b); ClickBox(b, ev);
+  Check(ev = ueNextHand, 'next: clicking Next Match deals a new match');
+  Check(g.ph = phDraw, 'next: the new match starts at the draw');
+  CheckEq(g.turn, 0, 'next: you move first');
+  CheckEq(g.pl[0].miles, 0, 'next: the cars start from zero');
+  CheckEq(g.pl[0].handN, 6, 'next: six cards each');
+  CheckEq(u.match[0], before, 'next: the running scores are kept');
+  Check(not u.handScored, 'next: the new match can be scored');
+  CheckEq(u.sel, 0, 'next: nothing is selected');
+  g.pl[0].miles := 50;                       { a marker: a re-deal would wipe it }
+  NextBox(b); ClickBox(b, ev);
+  Check(ev <> ueNextHand, 'next: the button no longer deals once the new match is under way');
+  CheckEq(g.pl[0].miles, 50, 'next: ...and the match in progress is untouched')
+end;
+
+procedure TestNewGameResetsScores;
+begin
+  UIInit(u);
+  UINewHand(u, g, 3);
+  u.match[0] := 500; u.match[1] := 300; u.sel := 2;
+  UINewGame(u, g, 9);
+  CheckEq(u.match[0], 0, 'newgame: your score is reset');
+  CheckEq(u.match[1], 0, 'newgame: the computer''s score is reset');
+  CheckEq(u.sel, 0, 'newgame: nothing selected');
+  Check(g.ph = phDraw, 'newgame: a fresh deal');
+  CheckEq(g.pl[0].handN, 6, 'newgame: six cards each')
+end;
+
+procedure TestComputerMoveMessages;
+var ev: UIEvent;
+begin
+  UIInit(u);
+  UINewHand(u, g, 5);
+  SetHand(g, 1, hzFlat, ck25, ck25, ck25, ck25, ck25);
+  SetHand(g, 0, ck50, ck50, ck50, ck50, ck50, ck50);
+  g.pl[0].battle := rmGo;
+  g.turn := 1; g.ph := phPlay;
+  UIAdvance(u, g, ev);
+  CheckEq(u.msg, MsgCpuAttack, 'cpu: an attack on you is announced');
+  Check(u.lastCard = hzFlat, 'cpu: ...with the card it used');
+
+  UIInit(u);
+  UINewHand(u, g, 5);
+  SetHand(g, 1, ck75, ck25, ck25, ck25, ck25, ck25);
+  g.pl[1].battle := rmGo;
+  g.turn := 1; g.ph := phPlay;
+  UIAdvance(u, g, ev);
+  CheckEq(u.msg, MsgCpuPlayed, 'cpu: a normal play is announced');
+  Check(u.lastCard = ck75, 'cpu: ...with the card it used');
+
+  UIInit(u);
+  UINewHand(u, g, 5);
+  SetHand(g, 1, ck25, ck25, ck25, ck25, ck25, ck25);        { no Go: only discards are possible }
+  g.turn := 1; g.ph := phPlay;
+  UIAdvance(u, g, ev);
+  CheckEq(u.msg, MsgCpuDiscard, 'cpu: a discard is announced');
+  Check(u.lastCard = ck25, 'cpu: ...with the card it threw away');
+
+  { the message goes away as soon as you act }
+  UINewHand(u, g, 6);
+  u.msg := MsgCpuAttack;
+  g.turn := 0; g.ph := phDraw;
+  ClickHand(1, ev);
+  u.msg := MsgCpuAttack;
+  g.ph := phPlay;
+  ClickHand(1, ev);
+  CheckEq(u.msg, MsgNone, 'cpu: selecting a card clears the computer''s message')
+end;
+
 procedure TestIgnoredClicks;
 var ev: UIEvent; b: Box; before: integer;
 begin
@@ -421,6 +523,9 @@ begin
   TestCoupFlows;
   TestHandOverScoresOnce;
   TestIgnoredClicks;
+  TestNextMatchButton;
+  TestNewGameResetsScores;
+  TestComputerMoveMessages;
   TestScriptedGames;
   Summary
 end.

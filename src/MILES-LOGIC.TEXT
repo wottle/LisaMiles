@@ -85,6 +85,7 @@ function  CanMoveNow(var p: PlayerState): boolean;
 function  CheckPlay(var g: Game; handIdx: integer; t: Target): integer;
 procedure ErrText(e: integer; var s: ErrStr);
 function  HandIndexOf(var p: PlayerState; k: CardKind): integer;
+function  CanPlayAny(var g: Game; s: integer): boolean;
 procedure DrawCard(var g: Game);
 procedure DoPlay(var g: Game; handIdx: integer; t: Target; var err: integer);
 procedure ResolveCoup(var g: Game; useCoup: boolean);
@@ -364,37 +365,56 @@ begin
   g.gone := g.gone + 1
 end;
 
-{ RULE R5: ends the hand at exactly 1000, or when the pile and both hands are empty. }
+{ Can seat s make any real play (anything except a discard) right now? }
+function CanPlayAny(var g: Game; s: integer): boolean;
+var i: integer; found: boolean; k: CardKind;
+begin
+  found := false;
+  for i := 1 to g.pl[s].handN do begin
+    k := g.pl[s].hand[i];
+    if CheckSelf(g.pl[s], k) = ErrOK then found := true;
+    if CheckAttack(g.pl[Opp(s)], k) = ErrOK then found := true
+  end;
+  CanPlayAny := found
+end;
+
+{ RULE R5 (as amended after the first playtest): give the turn to seat nxt.  While the draw pile lasts that is   }
+{ simply a draw.  Once it is empty there is nothing to draw and discarding is pointless, so a player with no   }
+{ real play is skipped, and when NEITHER player has one the hand is over.                                       }
+procedure PassTo(var g: Game; nxt: integer);
+begin
+  if g.deckNext <= NumCards then begin
+    g.turn := nxt;
+    g.ph := phDraw
+  end
+  else if CanPlayAny(g, nxt) then begin
+    g.turn := nxt;
+    g.ph := phPlay
+  end
+  else if CanPlayAny(g, Opp(nxt)) then begin
+    g.turn := Opp(nxt);
+    g.ph := phPlay
+  end
+  else g.ph := phOver
+end;
+
+{ The hand also ends at exactly 1000 miles. }
 procedure EndTurn(var g: Game);
-var nxt: integer;
 begin
   if g.pl[g.turn].miles = TripMiles then begin
     g.tripBy := g.turn;
     g.delayedTrip := (g.deckNext > NumCards);
     g.ph := phOver
   end
-  else begin
-    nxt := Opp(g.turn);
-    if g.deckNext > NumCards then begin
-      if (g.pl[0].handN = 0) and (g.pl[1].handN = 0) then g.ph := phOver
-      else begin
-        if g.pl[nxt].handN > 0 then g.turn := nxt;
-        g.ph := phDraw
-      end
-    end
-    else begin
-      g.turn := nxt;
-      g.ph := phDraw
-    end
-  end
+  else PassTo(g, Opp(g.turn))
 end;
 
 procedure ExtraTurn(var g: Game);
+var extra: boolean;
 begin
-  if SafetyExtraTurn and ((g.deckNext <= NumCards) or (g.pl[g.turn].handN > 0)) then
-    g.ph := phDraw
-  else
-    EndTurn(g)
+  extra := SafetyExtraTurn;
+  if extra then PassTo(g, g.turn)
+  else EndTurn(g)
 end;
 
 { Put a safety in play and apply the cure it gives; used by a normal play and by a coup. }
@@ -480,11 +500,7 @@ begin
       g.pl[c].limited := g.prevLimited;
       ApplySafety(g.pl[c], sf);                  { Right of Way also clears an older Stop/Limit }
       DealTo(g, c);
-      if g.pl[c].handN = 0 then EndTurn(g)
-      else begin
-        g.turn := c;
-        g.ph := phDraw
-      end
+      PassTo(g, c)
     end
     else EndTurn(g)
   end

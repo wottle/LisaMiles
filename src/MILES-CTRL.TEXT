@@ -18,19 +18,27 @@ const
   MsgHandOver     = 24;
   MsgCoupAsk      = 25;
   MsgAlreadyDrew  = 26;
+  MsgCpuPlayed    = 27;                { the computer played a card on itself }
+  MsgCpuAttack    = 28;                { the computer attacked you }
+  MsgCpuDiscard   = 29;                { the computer threw a card away }
 
 type
-  UIEvent = (ueNone, ueSelect, ueDeselect, ueDrew, ueMoved, ueRejected, ueCoupPrompt, ueHandOver);
+  UIEvent = (ueNone, ueSelect, ueDeselect, ueDrew, ueMoved, ueRejected, ueCoupPrompt, ueHandOver,
+             ueNextHand);
 
   UIState = record
     sel        : integer;                 { selected hand card, 0 = none }
     msg        : integer;                 { a message to show until the next action, or MsgNone }
     handScored : boolean;                 { this hand's points are already in match[] }
+    hands      : integer;                 { matches dealt since the last New Game }
+    lastCard   : CardKind;                { the card the computer last played or threw away }
     match      : array[0..1] of longint;  { running match totals }
   end;
 
 procedure UIInit(var u: UIState);
 procedure UINewHand(var u: UIState; var g: Game; seed: longint);
+procedure UINewGame(var u: UIState; var g: Game; seed: longint);
+procedure UINextHand(var u: UIState; var g: Game);
 procedure UIClick(var u: UIState; var g: Game; x, y: integer; var ev: UIEvent);
 procedure UIAdvance(var u: UIState; var g: Game; var ev: UIEvent);
 procedure UICoupAnswer(var u: UIState; var g: Game; useCoup: boolean; var ev: UIEvent);
@@ -44,6 +52,8 @@ begin
   u.sel := 0;
   u.msg := MsgNone;
   u.handScored := false;
+  u.hands := 0;
+  u.lastCard := ckNone;
   u.match[0] := 0;
   u.match[1] := 0
 end;
@@ -54,6 +64,24 @@ begin
   u.sel := 0;
   u.msg := MsgNone;
   u.handScored := false
+end;
+
+{ New Game: forget every score and deal a fresh match. }
+procedure UINewGame(var u: UIState; var g: Game; seed: longint);
+begin
+  UIInit(u);
+  NewGame(g, seed)
+end;
+
+{ Next Match: deal again, keeping the running scores.  The seed comes from the finished deal's generator so }
+{ every match differs, with no clock needed (and the whole thing stays reproducible in tests).            }
+procedure UINextHand(var u: UIState; var g: Game);
+begin
+  u.hands := u.hands + 1;
+  u.sel := 0;
+  u.msg := MsgNone;
+  u.handScored := false;
+  NewGame(g, (g.rng mod 1000000) * 31 + u.hands)
 end;
 
 { Which pile a card naturally lands on; the screen highlights it. }
@@ -84,7 +112,14 @@ procedure UIClick(var u: UIState; var g: Game; x, y: integer; var ev: UIEvent);
 var hit: HitInfo; err: integer; t: Target;
 begin
   ev := ueNone;
-  if (g.ph = phDraw) and (g.turn = 0) then begin
+  if g.ph = phOver then begin
+    HitTest(x, y, 0, 0, hit);
+    if hit.kind = hkNext then begin
+      UINextHand(u, g);
+      ev := ueNextHand
+    end
+  end
+  else if (g.ph = phDraw) and (g.turn = 0) then begin
     HitTest(x, y, g.pl[0].handN, 0, hit);
     if hit.kind = hkDraw then begin
       DrawCard(g);
@@ -144,7 +179,7 @@ end;
 
 { One computer action.  The Lisa program calls this on a timer so moves are visible. }
 procedure UIAdvance(var u: UIState; var g: Game; var ev: UIEvent);
-var mv: PlayMove; err: integer;
+var mv: PlayMove; err: integer; k: CardKind;
 begin
   ev := ueNone;
   if g.ph = phCoup then begin
@@ -166,8 +201,12 @@ begin
   end
   else if (g.ph = phPlay) and (g.turn = 1) then begin
     AIChoose(g, mv);
+    k := g.pl[1].hand[mv.hand];
     DoPlay(g, mv.hand, mv.tgt, err);
-    u.msg := MsgNone;
+    u.lastCard := k;                    { so the screen can say what just happened }
+    if mv.tgt = tgDiscard then u.msg := MsgCpuDiscard
+    else if mv.tgt = tgOpponent then u.msg := MsgCpuAttack
+    else u.msg := MsgCpuPlayed;
     ev := ueMoved;
     if g.ph = phCoup then begin
       if g.coupSeat = 0 then begin
