@@ -693,6 +693,25 @@ begin
   CheckEq(UITarget(u, g, 0), -1, 'target: nothing is highlighted when the match is over')
 end;
 
+procedure TestDiscardTarget;
+var ev: UIEvent;
+begin
+  FreshPlay;
+  SetHand(g, 0, rmGo, ck50, hzStop, sfAce, rmEndLimit, hzLimit);
+  Check(not UIDiscardOK(u, g), 'discard: nothing selected, the pile is not highlighted');
+  ClickHand(2, ev);
+  Check(UIDiscardOK(u, g), 'discard: any selected card can be thrown away');
+  ClickHand(2, ev);                                   { deselect }
+  Check(not UIDiscardOK(u, g), 'discard: deselecting removes the highlight');
+  ClickHand(3, ev);
+  g.turn := 1;
+  Check(not UIDiscardOK(u, g), 'discard: not on the computer''s turn');
+  g.turn := 0; g.ph := phOver;
+  Check(not UIDiscardOK(u, g), 'discard: not when the match is over');
+  g.ph := phDraw;
+  Check(not UIDiscardOK(u, g), 'discard: not before you have drawn')
+end;
+
 procedure TestExtensionFlow;
 var ev: UIEvent;
 begin
@@ -894,6 +913,7 @@ begin
   TestExtendButtons;
   TestGameOver;
   TestTargets;
+  TestDiscardTarget;
   TestDoubleClickPlays;
   TestDoubleClickRefusals;
   TestDoubleClickTiming;

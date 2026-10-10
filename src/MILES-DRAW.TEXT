@@ -102,13 +102,13 @@ begin
    PenPat(black)
 end;
 
-{ The target highlight: invert the outer 3 pixels of the pile.  It shows on white and black alike, }
+{ The target highlight: invert the outer 4 pixels of the pile.  It shows on white and black alike, }
 { and redrawing the pile (which erases it first) takes it away again.                              }
 procedure DrawRing (var r : Rect);
 var inner : Rect;
 begin
    inner := r;
-   InsetRect(inner, 3, 3);
+   InsetRect(inner, 4, 4);
    InvertRect(r);
    InvertRect(inner)
 end;
@@ -314,7 +314,8 @@ begin
    DiscardBox(b);
    BoxToRect(b, r);
    if theGame.discardTop <> ckNone then ShowFace(theGame.discardTop, r)
-   else DrawEmptySlot(r)
+   else DrawEmptySlot(r);
+   if UIDiscardOK(ui, theGame) then DrawRing(r)
 end;
 
 { The running scores. }
@@ -520,7 +521,8 @@ begin
 
    if shownG.pl[1].handN <> theGame.pl[1].handN then DrawBacks;
    if RemainingDeck(shownG) <> RemainingDeck(theGame) then ShowPile;
-   if shownG.discardTop <> theGame.discardTop then DrawDiscardArea;
+   if (shownG.discardTop <> theGame.discardTop) or
+      (UIDiscardOK(shownU, shownG) <> UIDiscardOK(ui, theGame)) then DrawDiscardArea;
    if (shownU.match[0] <> ui.match[0]) or (shownU.match[1] <> ui.match[1]) then DrawScores;
    wasBtn := (shownG.ph = phOver) and (not shownU.gameOver);   { was / is Next Match showing? }
    isBtn := (theGame.ph = phOver) and (not ui.gameOver);

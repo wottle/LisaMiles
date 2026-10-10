@@ -55,6 +55,7 @@ procedure UICoupAnswer(var u: UIState; var g: Game; useCoup: boolean; var ev: UI
 procedure UIExtendAnswer(var u: UIState; var g: Game; extend: boolean; var ev: UIEvent);
 function  NaturalSlot(k: CardKind): integer;
 function  UITarget(var u: UIState; var g: Game; seat: integer): integer;
+function  UIDiscardOK(var u: UIState; var g: Game): boolean;
 function  StatusMsg(var u: UIState; var g: Game): integer;
 
 implementation
@@ -85,6 +86,15 @@ end;
 { Which pile on seat's side should be highlighted for the selected card?  -1 for none.  Only on your }
 { own turn: your side (seat 0) for a card you can play on yourself, the computer's side (seat 1) for }
 { a hazard you can play on it.                                                                     }
+{ Is the discard pile a legal drop for the selected card right now?  (It is, for any card you hold, }
+{ once you have drawn and while it is your turn.)                                                    }
+function UIDiscardOK(var u: UIState; var g: Game): boolean;
+begin
+  UIDiscardOK := false;
+  if (u.sel >= 1) and (g.ph = phPlay) and (g.turn = 0) then
+    UIDiscardOK := CheckPlay(g, u.sel, tgDiscard) = ErrOK
+end;
+
 function UITarget(var u: UIState; var g: Game; seat: integer): integer;
 var r: integer; k: CardKind;
 begin
