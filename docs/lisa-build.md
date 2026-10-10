@@ -49,3 +49,12 @@ Order matters: `LOGIC`, `LAYOUT`, `CTRL`, `GLOBALS`, `DRAW`, `MAIN`.
 3. Install the new executable over the old one: `F`, `D`, `{T202}Obj`, `Y`; then `C`, source `MILES/MILES.OBJ`,
    destination `{T202}Obj`; `Q`. (Only changes to the phrase file need the full `<MILES/MAKE`.)
 4. Relaunch the tool from the Office System.
+
+## LisaEm as the dev loop (pseudo-tty)
+
+- LisaEm: Serial B = PseudoTTY `/tmp/b`, xon/xoff off, I/O ROM 88; use the stock Workshop 3.0 image.
+- On the Lisa: `R` then `<ALEX/TRANSFER_NO_HANDSHAKE` (a copy of ALEX/TRANSFER with both handshakes set to 0).
+- On the Mac: send with Alex's script, `--no_handshake --throttle_tx_millis 1`, run from a scratch directory
+  (it writes log.txt in the current directory). It prints a harmless "return to known state" warning.
+- When the files are sent the Lisa stays blank: run `python3 tools/lisa_console_main.py` (needs picocom
+  installed and no other program on /tmp/b). Then `R`, `<MILES/MAKE` on the Lisa.
