@@ -107,6 +107,24 @@ begin
    end
 end;
 
+{ The result alert must not open while the click that ended the match is still in flight: its mouse-up }
+{ would land on the alert and dismiss it.  So clicks only schedule it; the idle loop shows it later.   }
+procedure QueueResult;
+begin
+   resPend := true;
+   resAt := Time + ScaleUnits(30)
+end;
+
+procedure ShowDueResult;
+begin
+   if resPend then
+      if Time >= resAt then
+         if not StillDown then begin
+            resPend := false;
+            ShowHandResult
+         end
+end;
+
 { The computer attacked while we hold the matching safety: ask whether to play it. }
 procedure AskCoup;
 var ev   : UIEvent;
@@ -122,7 +140,7 @@ begin
    else
       UICoupAnswer(ui, theGame, false, ev);
    Repaint;
-   if ev = ueHandOver then ShowHandResult
+   if ev = ueHandOver then QueueResult
 end;
 
 { Everything that follows a click or a computer move: repaint, then any prompt. }
@@ -130,7 +148,8 @@ procedure AfterEvent (ev : UIEvent);
 begin
    if ev <> ueNone then Repaint;
    if ev = ueCoupPrompt then AskCoup
-   else if ev = ueHandOver then ShowHandResult;
+   else if ev = ueHandOver then QueueResult
+   else if ev = ueNextHand then resPend := false;
    nextAi := Time + ScaleUnits(aiDelay)
 end;
 
@@ -143,6 +162,7 @@ begin
             exit(StartGame);
    UINewGame(ui, theGame, Time);
    haveGame := true;
+   resPend := false;
    nextAi := Time + ScaleUnits(aiDelay);
    Repaint
 end;
@@ -328,6 +348,7 @@ begin
    toldToDie := false;
    myWindow  := nil;
    haveGame  := false;
+   resPend   := false;
    nextAi    := 0;
    UIInit(ui);
    InitDraw;
@@ -399,6 +420,7 @@ begin
          end
          else begin
             CalibrateClock;
+            ShowDueResult;
             DoComputerStep;
             LetOthersRun         { NEVER omitted: the scheduler is cooperative }
          end

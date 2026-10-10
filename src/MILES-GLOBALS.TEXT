@@ -84,6 +84,8 @@ var
    ui        : UIState;     { selection, status message, match totals }
    haveGame  : boolean;     { has a hand been dealt yet? }
    nextAi    : longint;     { Time value at which the computer may act next }
+   resPend   : boolean;     { a match result is waiting to be shown }
+   resAt     : longint;     { Time value from which it may be shown }
    unitsPerSec : longint;   { Window Manager clock units per REAL second (100 on a stock Lisa) }
    calTime0  : longint;     { Time at the start of the current calibration run }
    calSecs0  : longint;     { real seconds (battery clock) at the same moment }
