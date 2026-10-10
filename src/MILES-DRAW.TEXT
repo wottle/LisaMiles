@@ -159,11 +159,11 @@ begin
          PenSize(2, 2);
          FrameRect(r);
          PenNormal;
-         SetRect(band, r.left + 2, r.bottom - 15, r.right - 2, r.bottom - 2);
+         SetRect(band, r.left + 2, r.bottom - 19, r.right - 2, r.bottom - 2);
          PaintRect(band);
          if length(s) > 0 then begin
             TextMode(srcBic);                              { white text on the black band }
-            CenterString(r, band.bottom - 2 - fi.descent, s);
+            CenterString(r, band.bottom - 3 - fi.descent, s);
             TextMode(srcOr)
          end
       end

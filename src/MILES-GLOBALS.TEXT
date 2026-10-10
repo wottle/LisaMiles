@@ -182,11 +182,12 @@ end;
 { is no wider than room pixels in the current font ('' if none fits).  With a huge room that is  }
 { the card's full name.                                                                          }
 procedure FitCaption {var raw : Str255; room : integer; var out : Str255};
-var rest, part : Str255;
-    i          : integer;
-    more       : boolean;
+var rest, part, last : Str255;
+    i, n               : integer;
+    more               : boolean;
 begin
    out := '';
+   last := '';
    rest := raw;
    more := length(rest) > 0;
    while more do begin
@@ -197,6 +198,7 @@ begin
          part[length(part)] := rest[i];
          i := i + 1
       end;
+      last := part;
       if (length(out) = 0) and (StringWidth(part) <= room) then out := part;
       if i > length(rest) then more := false
       else begin
@@ -210,6 +212,19 @@ begin
          end;
          rest := part
       end
+   end;
+   { nothing fit: shorten the last alternative until it does, so no card is left bare }
+   n := length(last);
+   while (length(out) = 0) and (n >= 1) do begin
+      part := '';
+      i := 1;
+      while i <= n do begin
+         part := concat(part, ' ');
+         part[length(part)] := last[i];
+         i := i + 1
+      end;
+      if (StringWidth(part) <= room) or (n = 1) then out := part;
+      n := n - 1
    end
 end;
 
