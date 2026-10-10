@@ -347,8 +347,8 @@ begin
    DrawString(s)
 end;
 
-{ The Next Match button while a match is over; its spot is blank otherwise. }
-procedure DrawNextButton;
+{ The Next Match button while a match is over (the strip is blanked by DrawActionStrip). }
+procedure ShowNextButton;
 var b  : Box;
     r  : Rect;
     s  : Str255;
@@ -357,7 +357,6 @@ begin
    NextBox(b);
    BoxToRect(b, r);
    PenNormal;
-   EraseRect(r);
    if (theGame.ph = phOver) and (not ui.gameOver) then begin
       PenSize(2, 2);
       FrameRect(r);
@@ -372,17 +371,15 @@ begin
    end
 end;
 
-{ The Continue / End Game buttons while the 700-mile question is open; their strip is blank otherwise. }
-procedure DrawExtendButtons;
-var strip, r : Rect;
-    b        : Box;
-    s        : Str255;
-    fi       : FontInfo;
-    which    : integer;
+{ The Continue / End Game buttons while the 700-mile question is open. }
+procedure ShowExtendButtons;
+var r     : Rect;
+    b     : Box;
+    s     : Str255;
+    fi    : FontInfo;
+    which : integer;
 begin
-   SetRect(strip, 326, 84, 566, 122);
    PenNormal;
-   EraseRect(strip);
    if theGame.ph = phExtend then
       for which := 1 to 2 do begin
          if which = 1 then ContinueBox(b) else EndBox(b);
@@ -398,6 +395,18 @@ begin
          CenterString(r, r.top + ((r.bottom - r.top) + fi.ascent - fi.descent) div 2, s);
          TextFace([])
       end
+end;
+
+{ The strip beside the scores holds either the Next Match button or the Continue / End Game buttons, }
+{ never both: blank it once, then draw whichever applies.                                         }
+procedure DrawActionStrip;
+var strip : Rect;
+begin
+   SetRect(strip, 326, 84, 566, 122);
+   PenNormal;
+   EraseRect(strip);
+   ShowNextButton;
+   ShowExtendButtons
 end;
 
 { Your hand, raised card and all.  The whole strip is erased first (a lifted card used to be lower). }
@@ -467,8 +476,7 @@ begin
    ShowPile;
    DrawDiscardArea;
    DrawScores;
-   DrawExtendButtons;                       { before Next Match: they share a strip }
-   DrawNextButton;
+   DrawActionStrip;
    DrawHandStrip;
    MoveTo(0, statusLineY);
    LineTo(ContentW - 1, statusLineY);
@@ -526,10 +534,8 @@ begin
    if (shownU.match[0] <> ui.match[0]) or (shownU.match[1] <> ui.match[1]) then DrawScores;
    wasBtn := (shownG.ph = phOver) and (not shownU.gameOver);   { was / is Next Match showing? }
    isBtn := (theGame.ph = phOver) and (not ui.gameOver);
-   { the answer buttons share a strip with Next Match: redraw them first, then Next Match on top }
    extChanged := (shownG.ph = phExtend) <> (theGame.ph = phExtend);
-   if extChanged then DrawExtendButtons;
-   if extChanged or (wasBtn and (not isBtn)) or ((not wasBtn) and isBtn) then DrawNextButton;
+   if extChanged or (wasBtn and (not isBtn)) or ((not wasBtn) and isBtn) then DrawActionStrip;
 
    handChanged := (shownG.pl[0].handN <> theGame.pl[0].handN) or (shownU.sel <> ui.sel);
    for i := 1 to theGame.pl[0].handN do
