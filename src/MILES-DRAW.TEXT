@@ -466,8 +466,8 @@ begin
    ShowPile;
    DrawDiscardArea;
    DrawScores;
+   DrawExtendButtons;                       { before Next Match: they share a strip }
    DrawNextButton;
-   DrawExtendButtons;
    DrawHandStrip;
    MoveTo(0, statusLineY);
    LineTo(ContentW - 1, statusLineY);
@@ -483,6 +483,7 @@ var all         : Rect;
     changed     : boolean;
     handChanged : boolean;
     wasBtn, isBtn : boolean;
+    extChanged    : boolean;
 begin
    if window = nil then exit(RefreshContents);
    if not haveShown then begin
@@ -523,9 +524,10 @@ begin
    if (shownU.match[0] <> ui.match[0]) or (shownU.match[1] <> ui.match[1]) then DrawScores;
    wasBtn := (shownG.ph = phOver) and (not shownU.gameOver);   { was / is Next Match showing? }
    isBtn := (theGame.ph = phOver) and (not ui.gameOver);
-   if (wasBtn and (not isBtn)) or ((not wasBtn) and isBtn) then DrawNextButton;
-
-   if (shownG.ph = phExtend) <> (theGame.ph = phExtend) then DrawExtendButtons;
+   { the answer buttons share a strip with Next Match: redraw them first, then Next Match on top }
+   extChanged := (shownG.ph = phExtend) <> (theGame.ph = phExtend);
+   if extChanged then DrawExtendButtons;
+   if extChanged or (wasBtn and (not isBtn)) or ((not wasBtn) and isBtn) then DrawNextButton;
 
    handChanged := (shownG.pl[0].handN <> theGame.pl[0].handN) or (shownU.sel <> ui.sel);
    for i := 1 to theGame.pl[0].handN do
