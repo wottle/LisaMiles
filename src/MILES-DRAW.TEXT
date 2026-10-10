@@ -102,6 +102,31 @@ begin
    PenPat(black)
 end;
 
+{ A dotted outline: where a card will go (the open place in your hand while you are to draw). }
+procedure DrawDotted (var r : Rect);
+var x, y : integer;
+begin
+   PenNormal;
+   PenSize(2, 2);
+   x := r.left;
+   while x < r.right - 4 do begin
+      MoveTo(x, r.top);
+      Line(3, 0);
+      MoveTo(x, r.bottom - 2);
+      Line(3, 0);
+      x := x + 6
+   end;
+   y := r.top;
+   while y < r.bottom - 4 do begin
+      MoveTo(r.left, y);
+      Line(0, 3);
+      MoveTo(r.right - 2, y);
+      Line(0, 3);
+      y := y + 6
+   end;
+   PenNormal
+end;
+
 { The target highlight: invert the outer 4 pixels of the pile.  It shows on white and black alike, }
 { and redrawing the pile (which erases it first) takes it away again.                              }
 procedure DrawRing (var r : Rect);
@@ -422,6 +447,11 @@ begin
       HandBox(i, i = ui.sel, b);
       BoxToRect(b, r);
       ShowFace(theGame.pl[0].hand[i], r)
+   end;
+   if UIDrawSlot(theGame) then begin           { the open place the next card will fill }
+      HandBox(theGame.pl[0].handN + 1, false, b);
+      BoxToRect(b, r);
+      DrawDotted(r)
    end
 end;
 
@@ -537,7 +567,8 @@ begin
    extChanged := (shownG.ph = phExtend) <> (theGame.ph = phExtend);
    if extChanged or (wasBtn and (not isBtn)) or ((not wasBtn) and isBtn) then DrawActionStrip;
 
-   handChanged := (shownG.pl[0].handN <> theGame.pl[0].handN) or (shownU.sel <> ui.sel);
+   handChanged := (shownG.pl[0].handN <> theGame.pl[0].handN) or (shownU.sel <> ui.sel) or
+                  (UIDrawSlot(shownG) <> UIDrawSlot(theGame));
    for i := 1 to theGame.pl[0].handN do
       if shownG.pl[0].hand[i] <> theGame.pl[0].hand[i] then handChanged := true;
    if handChanged then DrawHandStrip;

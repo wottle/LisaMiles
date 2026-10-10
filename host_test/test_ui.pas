@@ -712,6 +712,21 @@ begin
   Check(not UIDiscardOK(u, g), 'discard: not before you have drawn')
 end;
 
+procedure TestDrawSlot;
+begin
+  FreshPlay;
+  g.ph := phDraw; g.turn := 0; g.pl[0].handN := 6;
+  Check(UIDrawSlot(g), 'drawslot: waiting for your draw, the seventh place is open');
+  g.pl[0].handN := 7;
+  Check(not UIDrawSlot(g), 'drawslot: a full hand has no open place');
+  g.pl[0].handN := 6; g.ph := phPlay;
+  Check(not UIDrawSlot(g), 'drawslot: not once you have drawn');
+  g.ph := phDraw; g.turn := 1;
+  Check(not UIDrawSlot(g), 'drawslot: not on the computer''s turn');
+  g.turn := 0; g.ph := phOver;
+  Check(not UIDrawSlot(g), 'drawslot: not when the match is over')
+end;
+
 procedure TestExtensionFlow;
 var ev: UIEvent;
 begin
@@ -914,6 +929,7 @@ begin
   TestGameOver;
   TestTargets;
   TestDiscardTarget;
+  TestDrawSlot;
   TestDoubleClickPlays;
   TestDoubleClickRefusals;
   TestDoubleClickTiming;
