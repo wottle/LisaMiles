@@ -115,7 +115,7 @@ def option_d():
     return img
 
 
-def option_e():
+def option_e(digits=True):
     """A speedometer-style gauge reading toward 1000."""
     img = blank()
     d = ImageDraw.Draw(img)
@@ -131,7 +131,8 @@ def option_e():
         d.line([x0, y0, x1, y1], fill=0)
     d.line([24, 20, 33, 12], fill=0)          # needle
     d.ellipse([22, 18, 26, 22], fill=0)
-    put_text(img, 16, 25, "1000")
+    if digits:
+        put_text(img, 16, 25, "1000")
     return img
 
 

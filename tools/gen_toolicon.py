@@ -7,9 +7,9 @@ program (src/MILES-MKICON.TEXT) which writes the real file on the Lisa.
 File layout (814 bytes, read from the Minesweeper icon file):
   26 bytes  header   (48 x 32 pixels, copied unchanged)
   32 rows x 24 bytes, each row four 6-byte (48-pixel) planes:
-      +0  click area   (here: the same as the mask)
-      +6  mask         (1 = opaque, the silhouette)
-      +12 image        (1 = black)
+      +0  click area   (the gauge silhouette)
+      +6  picture      (1 = black; drawn on a white box)
+      +12 overlay      (1 = drawn white on top while the icon is selected)
       +18 checkerboard (aa on even rows, 55 on odd rows, copied unchanged)
   20 bytes  trailer  (copied unchanged)
 
@@ -43,21 +43,52 @@ def rows_to_bytes(img, invert):
     return rows
 
 
+def _bits(img, black):
+    """Set of (x, y) for the pixels of a PIL 1-bit image that are black (or white)."""
+    px = img.load()
+    return {(x, y) for y in range(H) for x in range(W) if (px[x, y] == 0) == black}
+
+
+def _erode(cells, n):
+    for _ in range(n):
+        cells = {(x, y) for (x, y) in cells
+                 if {(x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)} <= cells}
+    return cells
+
+
+def _to_rows(cells):
+    rows = [bytearray(6) for _ in range(H)]
+    for x, y in cells:
+        rows[y][x // 8] |= 0x80 >> (x % 8)
+    return [bytes(r) for r in rows]
+
+
 def gauge_planes():
-    """(image rows, mask rows) for the chosen icon, option E, the gauge."""
-    img = io.option_e()
-    image = rows_to_bytes(img, invert=True)
-    mask = rows_to_bytes(io.silhouette(img), invert=False)
-    return image, mask
+    """(picture, overlay, area) rows for the chosen icon, option E, the gauge.
+
+    What the Office System does with them (found with a probe icon):
+      picture  drawn black, on a white box           -> a dark gauge face, markings left light, black 1000
+      overlay  drawn white on top when selected      -> a thin ring just inside the face
+      area     click area                            -> the gauge silhouette
+    """
+    body = io.option_e(digits=False)
+    whole = io.option_e(digits=True)
+    mask = io.silhouette(body).load()
+    face = {(x, y) for y in range(H) for x in range(W) if mask[x, y]}
+    strokes = _bits(body, True)
+    digits = _bits(whole, True) - strokes
+    picture = (face - strokes) | digits
+    overlay = _erode(face, 2) - _erode(face, 3)
+    return _to_rows(picture), _to_rows(overlay), _to_rows(face)
 
 
 def build_icon():
-    image, mask = gauge_planes()
+    picture, overlay, area = gauge_planes()
     out = bytearray(HEADER)
     for r in range(H):
-        out += mask[r]                                   # click area
-        out += mask[r]                                   # mask
-        out += image[r]                                  # image
+        out += area[r]                                   # click area
+        out += picture[r]                                # picture (black)
+        out += overlay[r]                                # overlay (white when selected)
         out += bytes([0xAA if r % 2 == 0 else 0x55]) * 6  # checkerboard
     out += TRAILER
     assert len(out) == 814
@@ -158,25 +189,59 @@ $ENDEXEC
 """
 
 
+def letter_rows(ch):
+    """A big solid letter, 48x32, as six-byte rows: used by --probe to learn what each plane does."""
+    from PIL import Image, ImageDraw, ImageFont
+    img = Image.new("1", (W, H), 1)
+    font = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 34)
+    d = ImageDraw.Draw(img)
+    box = d.textbbox((0, 0), ch, font=font)
+    d.text(((W - (box[2] - box[0])) // 2 - box[0], (H - (box[3] - box[1])) // 2 - box[1] - 1), ch, font=font, fill=0)
+    return rows_to_bytes(img, invert=True)
+
+
+def build_probe():
+    a, b, c = letter_rows("A"), letter_rows("B"), letter_rows("C")
+    out = bytearray(HEADER)
+    for r in range(H):
+        out += a[r] + b[r] + c[r] + bytes([0xAA if r % 2 == 0 else 0x55]) * 6
+    out += TRAILER
+    return bytes(out)
+
+
 def main():
+    if len(sys.argv) == 3 and sys.argv[1] == "--probe":
+        os.makedirs(sys.argv[2], exist_ok=True)
+        with open(os.path.join(sys.argv[2], "MILES-MKICON.TEXT"), "w") as f:
+            f.write(pascal_program(build_probe()))
+        print("wrote probe MKICON to", sys.argv[2])
+        return
     root = os.path.abspath(os.path.join(HERE, ".."))
     data = build_icon()
     with open(os.path.join(root, "src", "MILES-MKICON.TEXT"), "w") as f:
         f.write(pascal_program(data))
     with open(os.path.join(root, "src", "MILES-ICONMK.TEXT"), "w") as f:
         f.write(EXEC)
-    # preview of what will be on the desktop: the image through its mask
+    # preview: the icon unselected and selected, with the Lisa's tall pixels
     from PIL import Image
-    image, mask = gauge_planes()
-    prev = Image.new("L", (W, H), 210)
-    pp = prev.load()
-    for y in range(H):
-        for x in range(W):
-            bit = 0x80 >> (x % 8)
-            if mask[y][x // 8] & bit:
-                pp[x, y] = 0 if image[y][x // 8] & bit else 255
-    big = prev.resize((W * 6, H * 9), Image.NEAREST)
-    big.save(os.path.join(root, "docs", "mockups", "tool_icon_preview.png"))
+    picture, overlay, _ = gauge_planes()
+
+    def cell(rows, x, y):
+        return bool(rows[y][x // 8] & (0x80 >> (x % 8)))
+
+    sheet = Image.new("L", (2 * (W + 4) * 6, (H + 4) * 9), 200)
+    for k, selected in enumerate((False, True)):
+        tile = Image.new("L", (W, H), 255)
+        tp = tile.load()
+        for y in range(H):
+            for x in range(W):
+                if cell(picture, x, y):
+                    tp[x, y] = 0
+                if selected and cell(overlay, x, y):
+                    tp[x, y] = 255
+        big = tile.resize((W * 6, H * 9), Image.NEAREST)
+        sheet.paste(big, (k * (W + 4) * 6 + 12, 18))
+    sheet.save(os.path.join(root, "docs", "mockups", "tool_icon_preview.png"))
     print("wrote MILES-MKICON.TEXT (%d bytes of icon), MILES-ICONMK.TEXT, preview" % len(data))
 
 

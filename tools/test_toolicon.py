@@ -35,23 +35,34 @@ class ToolIcon(unittest.TestCase):
         for r, row in enumerate(plane(self.data, 18)):
             self.assertEqual(row, bytes([0xAA if r % 2 == 0 else 0x55]) * 6, "row %d" % r)
 
-    def test_image_and_mask_are_the_gauge(self):
-        image, mask = g.gauge_planes()
-        self.assertEqual(plane(self.data, 12), image)
-        self.assertEqual(plane(self.data, 6), mask)
-        black = sum(bin(b).count("1") for row in image for b in row)
-        solid = sum(bin(b).count("1") for row in mask for b in row)
-        self.assertTrue(100 < black < solid < 48 * 32 // 2 + 200, (black, solid))
+    def test_layers_are_the_gauge_design(self):
+        picture, overlay, area = g.gauge_planes()
+        self.assertEqual(plane(self.data, 6), picture)     # layer B: the picture, drawn black
+        self.assertEqual(plane(self.data, 12), overlay)    # layer C: white overlay when selected
+        self.assertEqual(plane(self.data, 0), area)        # layer A: the click area
 
-    def test_every_image_pixel_is_inside_the_mask(self):
-        image, mask = g.gauge_planes()
-        for ri, rm in zip(image, mask):
-            for a, b in zip(ri, rm):
-                self.assertEqual(a & ~b & 0xFF, 0)
+    def test_gauge_is_a_dark_face_with_light_markings_and_black_digits(self):
+        picture, overlay, area = g.gauge_planes()
 
-    def test_click_area_is_the_mask(self):
-        _, mask = g.gauge_planes()
-        self.assertEqual(plane(self.data, 0), mask)
+        def bit(rows, x, y):
+            return bool(rows[y][x // 8] & (0x80 >> (x % 8)))
+
+        dark = sum(bit(picture, x, y) for y in range(21) for x in range(48))
+        self.assertGreater(dark, 250, "the gauge face is mostly dark")
+        self.assertTrue(any(bit(picture, x, y) for y in range(25, 32) for x in range(16, 34)),
+                        "the 1000 below the gauge is black")
+        light = sum(not bit(picture, x, y) and bit(area, x, y) for y in range(21) for x in range(48))
+        self.assertGreater(light, 40, "tick marks and arcs are left light inside the face")
+
+    def test_selected_overlay_is_a_thin_ring_inside_the_face(self):
+        picture, overlay, area = g.gauge_planes()
+        ring = sum(bin(b).count("1") for row in overlay for b in row)
+        solid = sum(bin(b).count("1") for row in area for b in row)
+        self.assertGreater(ring, 30)
+        self.assertLess(ring, solid // 4)
+        for ro, ra in zip(overlay, area):
+            for o, a_ in zip(ro, ra):
+                self.assertEqual(o & ~a_ & 0xFF, 0, "the ring stays inside the click area")
 
     def test_pascal_program_embeds_exactly_these_bytes(self):
         text = g.pascal_program(self.data)
