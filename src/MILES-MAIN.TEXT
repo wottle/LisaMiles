@@ -125,24 +125,11 @@ begin
    if ev = ueHandOver then ShowHandResult
 end;
 
-{ At exactly 700 miles: extend to 1000 (OK) or stop here (Cancel). }
-procedure AskExtend;
-var ev : UIEvent;
-begin
-   if CautionAlert(allAlerts, alrtExtend) then
-      UIExtendAnswer(ui, theGame, true, ev)
-   else
-      UIExtendAnswer(ui, theGame, false, ev);
-   Repaint;
-   if ev = ueHandOver then ShowHandResult
-end;
-
 { Everything that follows a click or a computer move: repaint, then any prompt. }
 procedure AfterEvent (ev : UIEvent);
 begin
    if ev <> ueNone then Repaint;
    if ev = ueCoupPrompt then AskCoup
-   else if ev = ueExtendPrompt then AskExtend
    else if ev = ueHandOver then ShowHandResult;
    nextAi := Time + ScaleUnits(aiDelay)
 end;
@@ -161,14 +148,18 @@ begin
 end;
 
 procedure DoWindowClick;
-var ev : UIEvent;
+var ev  : UIEvent;
+    dbl : longint;
 begin
    if myWindow = nil then exit(DoWindowClick);
    SetPort(myWindow);
    { theEvent.when and clickDelay share the Window Manager clock, which runs on the CPU clock: on an  }
    { overclocked Lisa it ticks faster than real hundredths, so ScaleUnits converts the double-click    }
    { interval to real time.                                                                            }
-   UIClick(ui, theGame, theEvent.where.h, theEvent.where.v, theEvent.when, ScaleUnits(clickDelay), ev);
+   { Be generous: twice the system double-click interval, and never under one real second. }
+   dbl := ScaleUnits(clickDelay) * 2;
+   if dbl < ScaleUnits(100) then dbl := ScaleUnits(100);
+   UIClick(ui, theGame, theEvent.where.h, theEvent.where.v, theEvent.when, dbl, ev);
    AfterEvent(ev)
 end;
 

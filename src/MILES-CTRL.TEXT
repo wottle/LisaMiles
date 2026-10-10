@@ -23,6 +23,7 @@ const
   MsgCpuDiscard   = 29;                { the computer threw a card away }
   MsgCpuExtend    = 30;                { the computer reached 700 and is going on to 1000 }
   MsgGameOver     = 31;                { somebody reached the game target }
+  MsgExtendAsk    = 32;                { you are on exactly 700: Continue or End Game }
 
   GameTarget      = 5000;              { the first total to reach this ends the game }
 
@@ -191,7 +192,7 @@ begin
 end;
 
 procedure UIClick(var u: UIState; var g: Game; x, y: integer; now, dblDelay: longint; var ev: UIEvent);
-var hit: HitInfo; err: integer; t: Target; wasIdx: integer; wasAt: longint;
+var hit: HitInfo; err: integer; t: Target; wasIdx: integer; wasAt: longint; cb, eb: Box;
 begin
   ev := ueNone;
   wasIdx := u.lastClkIdx;
@@ -203,6 +204,12 @@ begin
       UINextHand(u, g);
       ev := ueNextHand
     end
+  end
+  else if g.ph = phExtend then begin     { only the two answer buttons count while the question is open }
+    ContinueBox(cb);
+    EndBox(eb);
+    if PointInBox(x, y, cb) then UIExtendAnswer(u, g, true, ev)
+    else if PointInBox(x, y, eb) then UIExtendAnswer(u, g, false, ev)
   end
   else if (g.ph = phDraw) and (g.turn = 0) then begin
     HitTest(x, y, g.pl[0].handN, 0, hit);
@@ -332,6 +339,7 @@ end;
 function StatusMsg(var u: UIState; var g: Game): integer;
 begin
   if u.gameOver and (g.ph = phOver) then StatusMsg := MsgGameOver
+  else if g.ph = phExtend then StatusMsg := MsgExtendAsk
   else if u.msg <> MsgNone then StatusMsg := u.msg
   else if g.ph = phOver then StatusMsg := MsgHandOver
   else if g.ph = phCoup then StatusMsg := MsgCoupAsk

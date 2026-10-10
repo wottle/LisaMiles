@@ -371,6 +371,34 @@ begin
    end
 end;
 
+{ The Continue / End Game buttons while the 700-mile question is open; their strip is blank otherwise. }
+procedure DrawExtendButtons;
+var strip, r : Rect;
+    b        : Box;
+    s        : Str255;
+    fi       : FontInfo;
+    which    : integer;
+begin
+   SetRect(strip, 326, 84, 566, 122);
+   PenNormal;
+   EraseRect(strip);
+   if theGame.ph = phExtend then
+      for which := 1 to 2 do begin
+         if which = 1 then ContinueBox(b) else EndBox(b);
+         BoxToRect(b, r);
+         PenSize(2, 2);
+         FrameRect(r);
+         PenNormal;
+         TextMode(srcOr);
+         TextFont(fntCaption);
+         TextFace([bold]);
+         GetFontInfo(fi);
+         if which = 1 then s := lblCont else s := lblStop;
+         CenterString(r, r.top + ((r.bottom - r.top) + fi.ascent - fi.descent) div 2, s);
+         TextFace([])
+      end
+end;
+
 { Your hand, raised card and all.  The whole strip is erased first (a lifted card used to be lower). }
 procedure DrawHandStrip;
 var i : integer;
@@ -439,6 +467,7 @@ begin
    DrawDiscardArea;
    DrawScores;
    DrawNextButton;
+   DrawExtendButtons;
    DrawHandStrip;
    MoveTo(0, statusLineY);
    LineTo(ContentW - 1, statusLineY);
@@ -495,6 +524,8 @@ begin
    wasBtn := (shownG.ph = phOver) and (not shownU.gameOver);   { was / is Next Match showing? }
    isBtn := (theGame.ph = phOver) and (not ui.gameOver);
    if (wasBtn and (not isBtn)) or ((not wasBtn) and isBtn) then DrawNextButton;
+
+   if (shownG.ph = phExtend) <> (theGame.ph = phExtend) then DrawExtendButtons;
 
    handChanged := (shownG.pl[0].handN <> theGame.pl[0].handN) or (shownU.sel <> ui.sel);
    for i := 1 to theGame.pl[0].handN do

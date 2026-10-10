@@ -36,6 +36,8 @@ procedure HandBox(i: integer; lifted: boolean; var b: Box);
 procedure DrawPileBox(var b: Box);
 procedure DiscardBox(var b: Box);
 procedure NextBox(var b: Box);
+procedure ContinueBox(var b: Box);
+procedure EndBox(var b: Box);
 procedure OppHandBox(i: integer; var b: Box);
 procedure RegionBox(seat: integer; var b: Box);
 procedure BoxCenter(var b: Box; var x, y: integer);
@@ -106,6 +108,17 @@ end;
 procedure NextBox(var b: Box);
 begin
   SetBox(b, 330, 88, 470, 118)
+end;
+
+{ The two answers to the extend-or-stop question, in the free strip beside the scores. }
+procedure ContinueBox(var b: Box);
+begin
+  SetBox(b, 330, 88, 440, 118)
+end;
+
+procedure EndBox(var b: Box);
+begin
+  SetBox(b, 450, 88, 560, 118)
 end;
 
 procedure OppHandBox(i: integer; var b: Box);

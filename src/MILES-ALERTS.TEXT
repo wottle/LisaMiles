@@ -94,12 +94,6 @@ for a 200 point bonus.  When the draw pile runs out, a player with no card to pl
 skipped, and the match ends when neither can play.  The first player whose
 score reaches 5000 wins the game.
 
-; -- Extend or stop at exactly 700 miles: OK extends, Cancel stops here.
-50 caution ok alert
-You have gone exactly 700 miles!^L^L
-OK extends the trip to 1000 miles (finish exactly on 1000 for a 200 point bonus).^L
-Cancel stops here: the trip is complete and the match ends.
-
 ; ==== PHRASES (number-only headers, one text line each, each ends with a blank line)
 ; -- 911..922: status text for the Err codes of MILES-LOGIC (910 + code).
 911
@@ -180,6 +174,10 @@ The computer reached 700 miles and is going on to 1000!
 
 941
 The game is over.  Choose New Game from the Game menu.
+
+; -- 942: the question while you sit on exactly 700 miles (answered by the two buttons).
+942
+Exactly 700 miles!  Continue on to 1000, or End Game here and score the trip.
 
 ; -- 951..969: what each card does, shown in the status line when it is selected
 ;    (950 + the card's position in MilesLogic.CardKind).
@@ -315,6 +313,13 @@ Scores
 
 994
 Next Match
+
+; -- 995..996: the buttons that answer the 700-mile question.
+995
+Continue
+
+996
+End Game
 
 0
 ; ==== MENUS ==================================================================

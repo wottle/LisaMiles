@@ -756,6 +756,42 @@ begin
   CheckEq(u.match[1], 700 + 400 + 300, 'extflow: ...scored at 700')
 end;
 
+procedure TestExtendButtons;
+var ev: UIEvent; a, b: Box;
+begin
+  ContinueBox(a); EndBox(b);
+  Check((a.right <= b.left) and (a.left >= 0) and (b.right <= ContentW), 'extbtn: two separate buttons inside the window');
+  Check((a.bottom <= 204) and (b.bottom <= 204) and (a.top > 68), 'extbtn: ...in the free strip between the rows');
+
+  { Continue extends to 1000 }
+  FreshPlay;
+  SetHand(g, 0, ck100, ck25, ck25, ck25, ck25, ck25);
+  g.pl[0].battle := rmGo; g.pl[0].miles := 600;
+  ClickHand(1, ev);
+  ClickSlot(0, SlotMiles, ev);
+  CheckEq(StatusMsg(u, g), MsgExtendAsk, 'extbtn: the status line asks the question');
+  ClickHand(1, ev);
+  Check((ev = ueNone) and (g.ph = phExtend), 'extbtn: a click elsewhere leaves the question open');
+  ClickBox(a, ev);
+  Check(ev = ueMoved, 'extbtn: Continue answers the question');
+  Check(g.pl[0].extended and (g.ph <> phExtend), 'extbtn: Continue extends the trip');
+
+  { End Game stops at 700 }
+  FreshPlay;
+  SetHand(g, 0, ck100, ck25, ck25, ck25, ck25, ck25);
+  g.pl[0].battle := rmGo; g.pl[0].miles := 600;
+  ClickHand(1, ev);
+  ClickSlot(0, SlotMiles, ev);
+  ClickBox(b, ev);
+  Check(ev = ueHandOver, 'extbtn: End Game ends the match at 700');
+  CheckEq(u.match[0], 700 + 400 + 300 + 500, 'extbtn: ...and scores it');
+
+  { the buttons do nothing at any other time }
+  FreshPlay;
+  ClickBox(a, ev);
+  Check(g.pl[0].extended = false, 'extbtn: Continue is inert outside the question')
+end;
+
 procedure TestGameOver;
 var ev: UIEvent; b: Box;
 begin
@@ -855,6 +891,7 @@ begin
   TestHandOverScoresOnce;
   TestIgnoredClicks;
   TestExtensionFlow;
+  TestExtendButtons;
   TestGameOver;
   TestTargets;
   TestDoubleClickPlays;
