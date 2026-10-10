@@ -727,6 +727,40 @@ begin
   Check(not UIDrawSlot(g), 'drawslot: not when the match is over')
 end;
 
+procedure TestDragStart;
+var ev: UIEvent; b: Box; ok: boolean; x, y: integer;
+begin
+  FreshPlay;
+  SetHand(g, 0, rmGo, ck50, hzStop, sfAce, rmEndLimit, hzLimit);
+  ok := UIBeginDrag(u, g, 2);
+  Check(ok and (u.sel = 2), 'drag: starting a drag selects the card');
+  ok := UIBeginDrag(u, g, 2);
+  Check(ok and (u.sel = 2), 'drag: ...and never toggles it off');
+  ok := UIBeginDrag(u, g, 5);
+  Check(ok and (u.sel = 5), 'drag: dragging another card switches the selection');
+  Check(not UIBeginDrag(u, g, 0), 'drag: no such card');
+  Check(not UIBeginDrag(u, g, 7), 'drag: no card in that place (hand of six)');
+
+  { dropping on a pile plays the card, exactly as a click there would }
+  FreshPlay;
+  SetHand(g, 0, rmGo, ck50, hzStop, sfAce, rmEndLimit, hzLimit);
+  g.pl[1].battle := rmGo;
+  ok := UIBeginDrag(u, g, 3);                          { Stop }
+  RegionBox(1, b); BoxCenter(b, x, y);
+  UIClick(u, g, x, y, 5000, 0, ev);
+  Check(ev = ueMoved, 'drag: dropping a Stop on the computer''s side plays it');
+  Check(g.pl[1].battle = hzStop, 'drag: ...and it lands on their battle pile');
+
+  { a drag that starts at the wrong time is refused }
+  FreshPlay;
+  g.ph := phDraw;
+  Check(not UIBeginDrag(u, g, 1), 'drag: nothing to drag before you have drawn');
+  g.ph := phPlay; g.turn := 1;
+  Check(not UIBeginDrag(u, g, 1), 'drag: nothing to drag on the computer''s turn');
+  g.turn := 0; g.ph := phExtend;
+  Check(not UIBeginDrag(u, g, 1), 'drag: nothing to drag while the 700-mile question is open')
+end;
+
 procedure TestExtensionFlow;
 var ev: UIEvent;
 begin
@@ -930,6 +964,7 @@ begin
   TestTargets;
   TestDiscardTarget;
   TestDrawSlot;
+  TestDragStart;
   TestDoubleClickPlays;
   TestDoubleClickRefusals;
   TestDoubleClickTiming;

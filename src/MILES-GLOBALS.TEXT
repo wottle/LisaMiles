@@ -66,6 +66,7 @@ const
    fntCaption = tile12;     { card captions and labels }
    fntBig     = tile18;     { card numerals }
 
+   dragSlop = 4;           { pixels the mouse must move with the button down before it is a drag }
    aiDelay = 60;            { hundredths of a second between the computer's moves }
 
 type

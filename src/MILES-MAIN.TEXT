@@ -156,7 +156,7 @@ end;
 { New Game: forget every score and deal a fresh match.  Ask first if that throws anything away. }
 procedure StartGame (confirm : boolean);
 begin
-   if confirm then
+   if confirm and (not ui.gameOver) then      { a finished game (past 5000) needs no confirming }
       if (theGame.ph <> phOver) or (ui.match[0] + ui.match[1] > 0) then
          if not CautionAlert(allAlerts, alrtNewGame) then
             exit(StartGame);
@@ -167,9 +167,30 @@ begin
    Repaint
 end;
 
+{ The dragged card: a two-pixel outline the size of a card, drawn by inverting four thin strips, so }
+{ flipping it a second time puts the table back exactly as it was.                                  }
+procedure FlipGhost (var gr : Rect);
+var e : Rect;
+begin
+   SetRect(e, gr.left, gr.top, gr.right, gr.top + 2);
+   InvertRect(e);
+   SetRect(e, gr.left, gr.bottom - 2, gr.right, gr.bottom);
+   InvertRect(e);
+   SetRect(e, gr.left, gr.top + 2, gr.left + 2, gr.bottom - 2);
+   InvertRect(e);
+   SetRect(e, gr.right - 2, gr.top + 2, gr.right, gr.bottom - 2);
+   InvertRect(e)
+end;
+
 procedure DoWindowClick;
-var ev  : UIEvent;
-    dbl : longint;
+var ev                  : UIEvent;
+    dbl, whenDown       : longint;
+    hit                 : HitInfo;
+    pt                  : Point;
+    ghost, whole        : Rect;
+    x0, y0, idx         : integer;
+    lastH, lastV        : integer;
+    moved, drawn, canDrag : boolean;
 begin
    if myWindow = nil then exit(DoWindowClick);
    SetPort(myWindow);
@@ -179,8 +200,65 @@ begin
    { Be generous: twice the system double-click interval, and never under one real second. }
    dbl := ScaleUnits(clickDelay) * 2;
    if dbl < ScaleUnits(100) then dbl := ScaleUnits(100);
-   UIClick(ui, theGame, theEvent.where.h, theEvent.where.v, theEvent.when, dbl, ev);
-   AfterEvent(ev)
+   x0 := theEvent.where.h;
+   y0 := theEvent.where.v;
+   whenDown := theEvent.when;
+
+   canDrag := false;
+   if (theGame.ph = phPlay) and (theGame.turn = 0) then begin
+      HitTest(x0, y0, theGame.pl[0].handN, ui.sel, hit);
+      canDrag := hit.kind = hkHand
+   end;
+   if not canDrag then begin
+      UIClick(ui, theGame, x0, y0, whenDown, dbl, ev);
+      AfterEvent(ev);
+      exit(DoWindowClick)
+   end;
+
+   { The button went down on a hand card: a click if it comes up in place, a drag if it travels. }
+   idx := hit.index;
+   moved := false;
+   drawn := false;
+   lastH := x0;
+   lastV := y0;
+   SetRect(whole, 0, 0, ContentW, ContentH);
+   while StillDown do begin
+      GetMouse(pt);
+      if not moved then
+         if abs(pt.h - x0) + abs(pt.v - y0) >= dragSlop then begin
+            moved := UIBeginDrag(ui, theGame, idx);   { selects the card: its drop spots light up }
+            if moved then begin
+               Repaint;
+               ClipRect(whole)
+            end
+         end;
+      if moved then
+         if (not drawn) or (pt.h <> lastH) or (pt.v <> lastV) then begin
+            if drawn then FlipGhost(ghost);
+            SetRect(ghost, pt.h - CardW div 2, pt.v - CardH div 2,
+                           pt.h - CardW div 2 + CardW, pt.v - CardH div 2 + CardH);
+            FlipGhost(ghost);
+            drawn := true;
+            lastH := pt.h;
+            lastV := pt.v
+         end;
+      LetOthersRun
+   end;
+   if drawn then FlipGhost(ghost);
+
+   if not moved then begin                          { never travelled: an ordinary click }
+      UIClick(ui, theGame, x0, y0, whenDown, dbl, ev);
+      AfterEvent(ev)
+   end
+   else begin
+      GetMouse(pt);
+      HitTest(pt.h, pt.v, theGame.pl[0].handN, ui.sel, hit);
+      if (hit.kind = hkOwn) or (hit.kind = hkOpp) or (hit.kind = hkDiscard) then
+         UIClick(ui, theGame, pt.h, pt.v, whenDown, 0, ev)   { dropped on a pile: same as clicking it }
+      else
+         ev := ueSelect;                            { dropped nowhere useful: the card stays selected }
+      AfterEvent(ev)
+   end
 end;
 
 { Phase-B idle work: let the computer take its turn, one visible step at a time. }

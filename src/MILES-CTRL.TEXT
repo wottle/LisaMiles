@@ -57,6 +57,7 @@ function  NaturalSlot(k: CardKind): integer;
 function  UITarget(var u: UIState; var g: Game; seat: integer): integer;
 function  UIDiscardOK(var u: UIState; var g: Game): boolean;
 function  UIDrawSlot(var g: Game): boolean;
+function  UIBeginDrag(var u: UIState; var g: Game; idx: integer): boolean;
 function  StatusMsg(var u: UIState; var g: Game): integer;
 
 implementation
@@ -87,6 +88,19 @@ end;
 { Which pile on seat's side should be highlighted for the selected card?  -1 for none.  Only on your }
 { own turn: your side (seat 0) for a card you can play on yourself, the computer's side (seat 1) for }
 { a hazard you can play on it.                                                                     }
+{ A drag has started on hand card idx: select it (never toggling it off) so its drop spots light up. }
+{ False if nothing can be played right now.                                                       }
+function UIBeginDrag(var u: UIState; var g: Game; idx: integer): boolean;
+begin
+  UIBeginDrag := false;
+  if (g.ph = phPlay) and (g.turn = 0) and (idx >= 1) and (idx <= g.pl[0].handN) then begin
+    u.sel := idx;
+    u.msg := MsgNone;
+    u.lastClkIdx := 0;                   { a drag never counts as half of a double-click }
+    UIBeginDrag := true
+  end
+end;
+
 { Is the human waiting to draw?  Then the open place after the last card of the hand is shown. }
 function UIDrawSlot(var g: Game): boolean;
 begin
