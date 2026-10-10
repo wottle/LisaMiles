@@ -4,3 +4,7 @@ build/
 .superpowers/
 docs/reference/
 dist/
+__pycache__/
+*.pyc
+log.txt
+lines.log

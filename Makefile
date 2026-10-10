@@ -50,6 +50,7 @@ sim: build/sim
 lint:
 	python3 tools/test_lint.py
 	python3 tools/test_toolicon.py
+	python3 tools/test_check_dc42.py
 	python3 tools/lint_lisa_subset.py $(PORTABLE)
 	python3 tools/lint_lisa_subset.py --lisa-only $(LISAONLY)
 	python3 tools/lint_lisa_subset.py --collisions $(PORTABLE) $(LISAONLY)

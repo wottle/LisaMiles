@@ -13,7 +13,7 @@ File layout (814 bytes, read from the Minesweeper icon file):
       +18 checkerboard (aa on even rows, 55 on odd rows, copied unchanged)
   20 bytes  trailer  (copied unchanged)
 
-  python3 tools/gen_toolicon.py        writes src/MILES-MKICON.TEXT, src/MILES-ICONMK.TEXT and a preview
+  python3 tools/gen_toolicon.py        writes src/MILES-MKICON.TEXT and a preview
 """
 import os
 import sys
@@ -173,22 +173,6 @@ def pascal_program(data):
     return PASCAL_HEAD + "\n".join(lines) + "\n" + PASCAL_TAIL % ICON_NAME
 
 
-EXEC = """\
-$EXEC
-P{ascal}MILES/MKICON
-
-
-L{ink}MILES/MKICON
-IOSPASLIB
-
-
-MILES/MKICON
-
-R{un}MILES/MKICON
-$ENDEXEC
-"""
-
-
 def letter_rows(ch):
     """A big solid letter, 48x32, as six-byte rows: used by --probe to learn what each plane does."""
     from PIL import Image, ImageDraw, ImageFont
@@ -220,8 +204,6 @@ def main():
     data = build_icon()
     with open(os.path.join(root, "src", "MILES-MKICON.TEXT"), "w") as f:
         f.write(pascal_program(data))
-    with open(os.path.join(root, "src", "MILES-ICONMK.TEXT"), "w") as f:
-        f.write(EXEC)
     # preview: the icon unselected and selected, with the Lisa's tall pixels
     from PIL import Image
     picture, overlay, _ = gauge_planes()
@@ -242,7 +224,7 @@ def main():
         big = tile.resize((W * 6, H * 9), Image.NEAREST)
         sheet.paste(big, (k * (W + 4) * 6 + 12, 18))
     sheet.save(os.path.join(root, "docs", "mockups", "tool_icon_preview.png"))
-    print("wrote MILES-MKICON.TEXT (%d bytes of icon), MILES-ICONMK.TEXT, preview" % len(data))
+    print("wrote MILES-MKICON.TEXT (%d bytes of icon) and the preview" % len(data))
 
 
 if __name__ == "__main__":
