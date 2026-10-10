@@ -492,8 +492,14 @@ begin
       ApplySelf(g, s, k);
       if IsSafety(k) then ExtraTurn(g)
       else if IsDistance(k) and (g.pl[s].miles = ExtendMiles) and (not g.pl[s].extended) then begin
-        g.extSeat := s;                  { exactly 700: extend to 1000, or stop here? }
-        g.ph := phExtend
+        if g.pl[Opp(s)].extended then begin
+          g.pl[s].extended := true;      { the match is already a 1000-mile one: no question, play on }
+          EndTurn(g)
+        end
+        else begin
+          g.extSeat := s;                { exactly 700: extend to 1000, or stop here? }
+          g.ph := phExtend
+        end
       end
       else EndTurn(g)
     end

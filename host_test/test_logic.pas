@@ -484,6 +484,39 @@ begin
   CheckEq(CheckPlay(g, 2, tgOpponent), ErrNoEffect, 'cure: ...any hazard')
 end;
 
+procedure TestExtensionAlreadyOn;
+var err: integer;
+begin
+  { the opponent has already extended: landing on 700 just carries on, nobody is asked }
+  FreshPlay(g);
+  SetHand(g, 0, ck100, ck25, ck25, ck25, ck25, ck25);
+  g.pl[0].battle := rmGo; g.pl[0].miles := 600;
+  g.pl[1].battle := rmGo; g.pl[1].miles := 900; g.pl[1].extended := true;
+  DoPlay(g, 1, tgSelf, err);
+  CheckEq(err, ErrOK, 'extOn: 600+100 is legal');
+  Check(g.ph <> phExtend, 'extOn: no question when the match is already extended');
+  Check(g.pl[0].extended, 'extOn: you are extended too, so 700 is no longer a wall');
+  CheckEq(g.turn, 1, 'extOn: the turn passes');
+  CheckEq(CheckInvariants(g), 0, 'extOn: the state is consistent');
+
+  { the same for the computer when you have extended }
+  FreshPlay(g);
+  SetHand(g, 1, ck100, ck25, ck25, ck25, ck25, ck25);
+  g.pl[1].battle := rmGo; g.pl[1].miles := 600;
+  g.pl[0].battle := rmGo; g.pl[0].miles := 800; g.pl[0].extended := true;
+  g.turn := 1;
+  DoPlay(g, 1, tgSelf, err);
+  Check(g.ph <> phExtend, 'extOn: the computer is not asked either');
+  Check(g.pl[1].extended, 'extOn: ...and is extended');
+
+  { with nobody extended the question is still asked }
+  FreshPlay(g);
+  SetHand(g, 0, ck100, ck25, ck25, ck25, ck25, ck25);
+  g.pl[0].battle := rmGo; g.pl[0].miles := 600;
+  DoPlay(g, 1, tgSelf, err);
+  Check(g.ph = phExtend, 'extOn: still asked when nobody has extended')
+end;
+
 procedure TestExtension;
 var err: integer;
 begin
@@ -777,6 +810,7 @@ begin
   TestScoring;
   TestNoSkip700;
   TestAILandsOn700;
+  TestExtensionAlreadyOn;
   TestExtension;
   TestAIExtend;
   TestLegalMoves;
