@@ -5,8 +5,7 @@ It installs as an Office System tool, written in Lisa Pascal, with original card
 
 ![1000 Miles on a Lisa](docs/screenshots/table.png)
 
-It is a race game in the style of the classic French card game. The name and all card art are original; see
-[Name and legal](#name-and-legal).
+It is a race game in the style of the classic French card game. 
 
 ## Install
 
@@ -90,9 +89,3 @@ How it is laid out:
 - Written with the help of Claude Code (Anthropic).
 - No Apple source or art is included. The Workshop and Office System are Apple's; you supply your own.
 
-## Name and legal
-
-"1000 Miles" and all card names and art here are original. Game rules aren't protected, but "Mille Bornes" and its
-artwork belong to their owners and are not used. This is a hobby project, offered as-is under the MIT license
-([LICENSE](LICENSE)). A quick search found no game called "1000 Miles", but other software uses similar names (for
-example "1000 Miler"); check the name yourself before distributing it commercially. Not legal advice.
