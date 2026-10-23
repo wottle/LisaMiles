@@ -56,15 +56,9 @@ class ToolIcon(unittest.TestCase):
         light = sum(not bit(picture, x, y) and bit(area, x, y) for y in range(21) for x in range(48))
         self.assertGreater(light, 40, "tick marks and arcs are left light inside the face")
 
-    def test_selected_overlay_is_a_thin_ring_inside_the_face(self):
+    def test_overlay_is_the_whole_silhouette(self):
         picture, overlay, area = g.gauge_planes()
-        ring = sum(bin(b).count("1") for row in overlay for b in row)
-        solid = sum(bin(b).count("1") for row in area for b in row)
-        self.assertGreater(ring, 30)
-        self.assertLess(ring, solid // 4)
-        for ro, ra in zip(overlay, area):
-            for o, a_ in zip(ro, ra):
-                self.assertEqual(o & ~a_ & 0xFF, 0, "the ring stays inside the click area")
+        self.assertEqual(overlay, area, "the placeholder left while dragging is the full silhouette")
 
     def test_pascal_program_embeds_exactly_these_bytes(self):
         text = g.pascal_program(self.data)

@@ -23,7 +23,7 @@ sys.path.insert(0, os.path.join(HERE, "mockups"))
 import icon_options as io  # noqa: E402
 
 W, H = 48, 32
-SOLID_AREA = True   # click/erase area is the whole box, not the silhouette (silhouette left pixels behind when moved)
+SOLID_AREA = False   # click/erase area is the whole box, not the silhouette (silhouette left pixels behind when moved)
 HEADER = bytes.fromhex("0003000000020030" "0000ffe000300020" "018a000000200000" "000c")
 TRAILER = bytes.fromhex("0000003000600090" "00c0003000300030" "0030ffff")
 ICON_NAME = "{T202}icon"
@@ -69,7 +69,7 @@ def gauge_planes():
 
     What the Office System does with them (found with a probe icon):
       picture  drawn black, on a white box           -> a dark gauge face, markings left light, black 1000
-      overlay  drawn white on top when selected      -> a thin ring just inside the face
+      overlay  drawn white when selected; its shape is the gray placeholder left while dragging -> the whole silhouette
       area     click area                            -> the gauge silhouette
     """
     body = io.option_e(digits=False)
@@ -79,7 +79,7 @@ def gauge_planes():
     strokes = _bits(body, True)
     digits = _bits(whole, True) - strokes
     picture = (face - strokes) | digits
-    overlay = _erode(face, 2) - _erode(face, 3)
+    overlay = face    # whole silhouette: the Office System draws the placeholder at the old spot from this layer
     return _to_rows(picture), _to_rows(overlay), _to_rows(face)
 
 
