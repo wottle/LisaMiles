@@ -59,6 +59,9 @@ class ToolIcon(unittest.TestCase):
     def test_overlay_is_the_whole_silhouette(self):
         picture, overlay, area = g.gauge_planes()
         self.assertEqual(overlay, area, "the placeholder left while dragging is the full silhouette")
+        for rp, ro in zip(picture, overlay):
+            for p_, o_ in zip(rp, ro):
+                self.assertEqual(p_ & ~o_ & 0xFF, 0, "every black pixel is inside the placeholder (else it is left behind)")
 
     def test_pascal_program_embeds_exactly_these_bytes(self):
         text = g.pascal_program(self.data)

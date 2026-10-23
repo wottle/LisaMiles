@@ -79,8 +79,13 @@ def gauge_planes():
     strokes = _bits(body, True)
     digits = _bits(whole, True) - strokes
     picture = (face - strokes) | digits
-    overlay = face    # whole silhouette: the Office System draws the placeholder at the old spot from this layer
-    return _to_rows(picture), _to_rows(overlay), _to_rows(face)
+    xs = [x for x, _ in digits]
+    ys = [y for _, y in digits]
+    block = {(x, y) for x in range(max(min(xs) - 1, 0), min(max(xs) + 2, W))
+             for y in range(max(min(ys) - 1, 0), min(max(ys) + 2, H))}   # a solid block around the 1000
+    whole_shape = face | block
+    overlay = whole_shape    # whole silhouette plus the block: the Office System draws the placeholder at the old spot from this layer
+    return _to_rows(picture), _to_rows(overlay), _to_rows(whole_shape)
 
 
 def build_icon():
