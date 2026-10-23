@@ -23,6 +23,7 @@ sys.path.insert(0, os.path.join(HERE, "mockups"))
 import icon_options as io  # noqa: E402
 
 W, H = 48, 32
+SOLID_AREA = True   # click/erase area is the whole box, not the silhouette (silhouette left pixels behind when moved)
 HEADER = bytes.fromhex("0003000000020030" "0000ffe000300020" "018a000000200000" "000c")
 TRAILER = bytes.fromhex("0000003000600090" "00c0003000300030" "0030ffff")
 ICON_NAME = "{T202}icon"
@@ -85,6 +86,8 @@ def gauge_planes():
 def build_icon():
     picture, overlay, area = gauge_planes()
     out = bytearray(HEADER)
+    if SOLID_AREA:
+        area = [b'\xff' * 6] * H                      # whole 48 x 32 box: the Office System erases it all on a move
     for r in range(H):
         out += area[r]                                   # click area
         out += picture[r]                                # picture (black)

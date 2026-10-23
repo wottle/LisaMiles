@@ -39,6 +39,8 @@ class ToolIcon(unittest.TestCase):
         picture, overlay, area = g.gauge_planes()
         self.assertEqual(plane(self.data, 6), picture)     # layer B: the picture, drawn black
         self.assertEqual(plane(self.data, 12), overlay)    # layer C: white overlay when selected
+        if g.SOLID_AREA:
+            area = [b'\xff' * 6] * g.H                  # layer A is the whole box
         self.assertEqual(plane(self.data, 0), area)        # layer A: the click area
 
     def test_gauge_is_a_dark_face_with_light_markings_and_black_digits(self):
